@@ -34,14 +34,16 @@ class AutoSync {
                 count: approvedCharacters.length
             };
 
-            // 使用简单的存储方案
-            const success = await this.uploadToSimpleStorage(syncData);
+            // 检查是否在同域名（Vercel）
+            const isOnline = window.location.hostname.includes('vercel.app');
             
-            if (success) {
-                console.log(`✅ 同步成功！已上传 ${approvedCharacters.length} 个角色`);
-                return true;
+            if (isOnline) {
+                // 线上版本：使用真正的localStorage同步
+                const success = await this.uploadToSimpleStorage(syncData);
+                return success;
             } else {
-                throw new Error('上传失败');
+                // 本地版本：生成代码方式
+                return false; // 让syncToFrontend处理
             }
 
         } catch (error) {
@@ -177,15 +179,51 @@ class AutoSync {
 // 全局实例
 window.autoSync = new AutoSync();
 
-// 后台管理使用的同步函数 - 生成同步代码
+// 后台管理使用的同步函数 - 智能同步
 window.syncToFrontend = async function() {
     const button = event.target;
     const originalText = button.textContent;
     
-    button.textContent = '🔄 生成同步代码...';
+    button.textContent = '🔄 同步中...';
     button.disabled = true;
     
     try {
+        const isOnline = window.location.hostname.includes('vercel.app');
+        
+        if (isOnline) {
+            // 线上版本：真正的自动同步
+            const success = await window.autoSync.syncToCloud();
+            
+            if (success) {
+                button.textContent = '✅ 同步成功';
+                alert('✅ 数据已同步到前端！\n前端应用将在30秒内自动更新\n\n打开前端应用：https://aiko-spark-sync.vercel.app');
+                
+                // 自动打开前端应用
+                setTimeout(() => {
+                    window.open('https://aiko-spark-sync.vercel.app', '_blank');
+                }, 1000);
+                
+            } else {
+                throw new Error('同步失败');
+            }
+        } else {
+            // 本地版本：代码生成方式
+            await handleLocalSync();
+        }
+        
+    } catch (error) {
+        button.textContent = '❌ 同步失败';
+        alert('❌ 同步失败: ' + error.message);
+        console.error('同步失败:', error);
+    }
+    
+    setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+    }, 3000);
+    
+    // 本地同步处理函数
+    async function handleLocalSync() {
         // 获取角色数据
         const data = localStorage.getItem('cached_characters');
         if (!data) {
@@ -234,11 +272,10 @@ window.syncToFrontend = async function() {
         
         button.textContent = '✅ 代码已复制';
         
-        // 显示使用说明
         const instructions = `✅ 同步代码已复制到剪贴板！
 
 📋 使用步骤：
-1. 打开前端应用：http://localhost:8087
+1. 前端应用将自动打开：http://localhost:8087
 2. 按F12打开开发者工具
 3. 切换到Console标签页
 4. 粘贴代码并按回车执行
@@ -251,15 +288,5 @@ window.syncToFrontend = async function() {
         
         // 自动打开前端应用
         window.open('http://localhost:8087', '_blank');
-        
-    } catch (error) {
-        button.textContent = '❌ 生成失败';
-        alert('❌ 生成同步代码失败: ' + error.message);
-        console.error('同步代码生成失败:', error);
     }
-    
-    setTimeout(() => {
-        button.textContent = originalText;
-        button.disabled = false;
-    }, 5000);
 };
