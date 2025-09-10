@@ -12,47 +12,24 @@ class SyncAPI {
     async init() {
         console.log('🚀 初始化自动同步服务...');
         try {
-            // 尝试获取现有的Gist
-            const gistData = await this.getOrCreateGist();
+            // 直接使用简化的同步方案
             console.log('✅ 同步服务初始化成功');
             return true;
         } catch (error) {
             console.error('❌ 同步服务初始化失败:', error);
-            // 降级到localStorage同步
-            this.fallbackToLocalStorage();
             return false;
         }
     }
 
-    // 上传角色数据到云端
+    // 上传角色数据到云端（简化版）
     async uploadCharacters(characters) {
-        console.log('📤 上传角色数据到云端...');
+        console.log('📤 准备角色数据...');
         try {
-            // 使用简单的JSON存储服务
-            const response = await fetch('https://jsonbin.io/v3/b', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Master-Key': '$2a$10$aiko.spark.sync.key.demo'
-                },
-                body: JSON.stringify({
-                    characters: characters,
-                    timestamp: Date.now(),
-                    version: '1.0'
-                })
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                localStorage.setItem('sync_bin_id', result.metadata.id);
-                console.log('✅ 数据上传成功，ID:', result.metadata.id);
-                return result.metadata.id;
-            } else {
-                throw new Error('上传失败');
-            }
-        } catch (error) {
-            console.error('❌ 上传失败，使用备用方案:', error);
+            // 直接使用备用方案，避免CORS问题
             return this.fallbackUpload(characters);
+        } catch (error) {
+            console.error('❌ 数据准备失败:', error);
+            return null;
         }
     }
 
@@ -79,24 +56,24 @@ class SyncAPI {
         }
     }
 
-    // 备用方案：使用更简单的存储
+    // 备用方案：直接生成同步代码
     fallbackUpload(characters) {
-        console.log('🔄 使用备用上传方案...');
+        console.log('🔄 生成直接同步代码...');
         try {
-            // 使用pastebin或类似服务
-            const data = JSON.stringify({
+            // 生成包含数据的同步代码
+            const syncId = 'direct-' + Date.now();
+            const syncData = {
                 characters: characters,
                 timestamp: Date.now(),
-                id: 'aiko-' + Date.now()
-            });
+                id: syncId
+            };
             
-            // 模拟上传成功
-            const fakeId = 'local-' + Date.now();
-            localStorage.setItem('sync_data_' + fakeId, data);
-            console.log('✅ 备用上传成功，ID:', fakeId);
-            return fakeId;
+            // 将数据嵌入到同步代码中
+            localStorage.setItem('sync_data_' + syncId, JSON.stringify(syncData));
+            console.log('✅ 同步代码生成成功，ID:', syncId);
+            return syncId;
         } catch (error) {
-            console.error('❌ 备用上传也失败:', error);
+            console.error('❌ 同步代码生成失败:', error);
             return null;
         }
     }
@@ -169,20 +146,9 @@ class SyncAPI {
             // 生成前端自动同步代码
             const autoSyncCode = this.generateAutoSyncCode(uploadId, approvedCharacters.length);
             
-            // 尝试直接注入到前端
-            const success = await this.injectToFrontend(autoSyncCode);
-            
-            if (success) {
-                alert(`✅ 自动同步成功！
-                
-已同步 ${approvedCharacters.length} 个角色到前端应用
-无需任何手动操作！`);
-                return true;
-            } else {
-                // 如果直接注入失败，提供备用方案
-                this.showBackupSyncOption(autoSyncCode, approvedCharacters.length);
-                return false;
-            }
+            // 直接显示同步界面（避免跨域问题）
+            this.showBackupSyncOption(autoSyncCode, approvedCharacters.length);
+            return true;
 
         } catch (error) {
             console.error('❌ 自动同步失败:', error);
@@ -191,44 +157,53 @@ class SyncAPI {
         }
     }
 
-    // 生成自动同步代码
+    // 生成自动同步代码（直接包含数据）
     generateAutoSyncCode(uploadId, count) {
+        const syncData = localStorage.getItem('sync_data_' + uploadId);
+        if (!syncData) {
+            throw new Error('同步数据不存在');
+        }
+        
+        const data = JSON.parse(syncData);
+        const characters = data.characters;
+        
         return `
-// AIko Spark 自动同步执行
-(async function() {
+// AIko Spark 直接同步执行 - ${new Date().toLocaleString()}
+(function() {
     try {
-        console.log('🚀 AIko Spark 自动同步开始...');
+        console.log('🚀 AIko Spark 直接同步开始...');
         
-        // 从云端获取数据
-        const response = await fetch('https://api.jsonbin.io/v3/b/${uploadId}/latest', {
-            headers: { 'X-Master-Key': '$2a$10$aiko.spark.sync.key.demo' }
-        });
+        // 直接使用嵌入的角色数据
+        const newCharacters = ${JSON.stringify(characters, null, 2)};
         
-        if (response.ok) {
-            const result = await response.json();
-            const newCharacters = result.record.characters;
-            
-            // 合并到本地数据
-            const existingData = localStorage.getItem('cached_characters');
-            let allCharacters = existingData ? JSON.parse(existingData) : [];
-            const existingIds = new Set(allCharacters.map(c => c.id));
-            const newUniqueCharacters = newCharacters.filter(c => !existingIds.has(c.id));
-            allCharacters = allCharacters.concat(newUniqueCharacters);
-            
-            // 保存数据
-            localStorage.setItem('cached_characters', JSON.stringify(allCharacters));
-            localStorage.setItem('characters_cache_time', Date.now().toString());
-            localStorage.setItem('data_sync_timestamp', Date.now().toString());
-            
-            console.log('✅ 自动同步完成！新增: ' + newUniqueCharacters.length + ' 个，总计: ' + allCharacters.length + ' 个');
-            
-            // 触发页面刷新
-            if (typeof window !== 'undefined' && window.location) {
+        console.log('📊 准备同步 ' + newCharacters.length + ' 个角色...');
+        
+        // 合并到本地数据
+        const existingData = localStorage.getItem('cached_characters');
+        let allCharacters = existingData ? JSON.parse(existingData) : [];
+        const existingIds = new Set(allCharacters.map(c => c.id));
+        const newUniqueCharacters = newCharacters.filter(c => !existingIds.has(c.id));
+        allCharacters = allCharacters.concat(newUniqueCharacters);
+        
+        // 保存数据
+        localStorage.setItem('cached_characters', JSON.stringify(allCharacters));
+        localStorage.setItem('characters_cache_time', Date.now().toString());
+        localStorage.setItem('data_sync_timestamp', Date.now().toString());
+        
+        console.log('✅ 直接同步完成！新增: ' + newUniqueCharacters.length + ' 个，总计: ' + allCharacters.length + ' 个');
+        
+        // 显示成功提示
+        alert('✅ 角色同步成功！\\n新增: ' + newUniqueCharacters.length + ' 个角色\\n总计: ' + allCharacters.length + ' 个角色\\n\\n页面将自动刷新显示新角色');
+        
+        // 触发页面刷新
+        if (typeof window !== 'undefined' && window.location) {
+            setTimeout(() => {
                 window.location.reload();
-            }
+            }, 1000);
         }
     } catch (error) {
-        console.error('❌ 自动同步失败:', error);
+        console.error('❌ 直接同步失败:', error);
+        alert('❌ 同步失败: ' + error.message);
     }
 })();`;
     }
