@@ -50,46 +50,30 @@ class AutoSync {
         }
     }
 
-    // 使用简单存储（无CORS问题）
+    // 使用本地存储同步（无CORS问题）
     async uploadToSimpleStorage(data) {
         try {
-            // 方案1：使用 httpbin.org 作为临时存储
-            const response = await fetch('https://httpbin.org/post', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                // 保存同步信息
-                localStorage.setItem('sync_info', JSON.stringify({
-                    url: 'https://httpbin.org/post',
-                    timestamp: Date.now(),
-                    count: data.count
-                }));
-                return true;
-            }
-        } catch (error) {
-            console.log('方案1失败，尝试方案2...');
-        }
-
-        // 方案2：使用 localStorage 跨标签页同步
-        try {
+            console.log('📤 使用本地存储同步方案...');
+            
+            // 直接使用 localStorage 跨标签页同步
             const syncKey = 'aiko_global_sync_' + Date.now();
             localStorage.setItem(syncKey, JSON.stringify(data));
             localStorage.setItem('aiko_latest_sync', syncKey);
             
-            // 触发跨标签页事件
-            window.dispatchEvent(new StorageEvent('storage', {
-                key: 'aiko_latest_sync',
-                newValue: syncKey
+            // 保存同步信息用于调试
+            localStorage.setItem('sync_info', JSON.stringify({
+                syncKey: syncKey,
+                timestamp: Date.now(),
+                count: data.count,
+                method: 'localStorage'
             }));
-
-            console.log('✅ 使用本地同步方案');
+            
+            console.log('✅ 数据已保存到本地存储，同步键：' + syncKey);
+            console.log('📊 同步数据统计：' + data.count + ' 个角色');
+            
             return true;
         } catch (error) {
-            console.error('所有同步方案都失败了:', error);
+            console.error('❌ 本地存储同步失败:', error);
             return false;
         }
     }
@@ -193,32 +177,89 @@ class AutoSync {
 // 全局实例
 window.autoSync = new AutoSync();
 
-// 后台管理使用的同步函数
+// 后台管理使用的同步函数 - 生成同步代码
 window.syncToFrontend = async function() {
     const button = event.target;
     const originalText = button.textContent;
     
-    button.textContent = '🔄 同步中...';
+    button.textContent = '🔄 生成同步代码...';
     button.disabled = true;
     
     try {
-        const success = await window.autoSync.syncToCloud();
-        
-        if (success) {
-            button.textContent = '✅ 同步成功';
-            alert('✅ 数据已同步到前端！\n前端应用将在30秒内自动更新');
-        } else {
-            button.textContent = '❌ 同步失败';
-            alert('❌ 同步失败，请重试');
+        // 获取角色数据
+        const data = localStorage.getItem('cached_characters');
+        if (!data) {
+            throw new Error('没有角色数据');
         }
+
+        const characters = JSON.parse(data);
+        const approvedCharacters = characters.filter(c => 
+            c.reviewStatus === 'approved' || c.isOfficial
+        );
+
+        if (approvedCharacters.length === 0) {
+            throw new Error('没有已审核的角色');
+        }
+
+        // 生成同步代码
+        const syncCode = `
+// AIko Spark 自动同步执行代码 - ${new Date().toLocaleString()}
+(function() {
+    try {
+        console.log('🚀 开始同步 ${approvedCharacters.length} 个角色...');
+        const newCharacters = ${JSON.stringify(approvedCharacters, null, 2)};
+        
+        const existingData = localStorage.getItem('cached_characters');
+        let allCharacters = existingData ? JSON.parse(existingData) : [];
+        const existingIds = new Set(allCharacters.map(c => c.id));
+        const uniqueNewCharacters = newCharacters.filter(c => !existingIds.has(c.id));
+        
+        allCharacters = allCharacters.concat(uniqueNewCharacters);
+        localStorage.setItem('cached_characters', JSON.stringify(allCharacters));
+        localStorage.setItem('characters_cache_time', Date.now().toString());
+        localStorage.setItem('data_sync_timestamp', Date.now().toString());
+        
+        console.log('✅ 同步完成！新增: ' + uniqueNewCharacters.length + ' 个，总计: ' + allCharacters.length + ' 个');
+        alert('✅ 角色同步成功！\\\\n新增: ' + uniqueNewCharacters.length + ' 个角色\\\\n总计: ' + allCharacters.length + ' 个角色\\\\n\\\\n页面将自动刷新');
+        
+        setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+        console.error('❌ 同步失败:', error);
+        alert('❌ 同步失败: ' + error.message);
+    }
+})();`;
+
+        // 复制到剪贴板
+        await navigator.clipboard.writeText(syncCode);
+        
+        button.textContent = '✅ 代码已复制';
+        
+        // 显示使用说明
+        const instructions = `✅ 同步代码已复制到剪贴板！
+
+📋 使用步骤：
+1. 打开前端应用：http://localhost:8087
+2. 按F12打开开发者工具
+3. 切换到Console标签页
+4. 粘贴代码并按回车执行
+
+📊 本次同步：${approvedCharacters.length} 个已审核角色
+
+⚡ 执行后将自动刷新页面显示新角色`;
+
+        alert(instructions);
+        
+        // 自动打开前端应用
+        window.open('http://localhost:8087', '_blank');
         
     } catch (error) {
-        button.textContent = '❌ 同步失败';
-        alert('❌ 同步失败: ' + error.message);
+        button.textContent = '❌ 生成失败';
+        alert('❌ 生成同步代码失败: ' + error.message);
+        console.error('同步代码生成失败:', error);
     }
     
     setTimeout(() => {
         button.textContent = originalText;
         button.disabled = false;
-    }, 3000);
+    }, 5000);
 };
