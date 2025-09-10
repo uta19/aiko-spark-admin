@@ -1,20 +1,10 @@
 {
   "version": 2,
   "name": "aiko-spark-admin",
-  "builds": [
+  "rewrites": [
     {
-      "src": "index.html",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/admin",
-      "dest": "/index.html"
+      "source": "/admin",
+      "destination": "/index.html"
     }
   ],
   "headers": [
