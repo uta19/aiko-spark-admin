@@ -222,6 +222,7 @@
     <div id="notifications" class="fixed top-4 right-4 z-50"></div>
 
     <script src="admin.js"></script>
+    <script src="sync-api.js"></script>
     <script>
         // 初始化图标
         lucide.createIcons();
@@ -537,69 +538,48 @@
             }
         };
 
-        // 一键同步到前端
-        window.autoSyncToFrontend = function() {
-            console.log('🚀 开始一键同步到前端...');
+        // 一键同步到前端（真正的自动同步）
+        window.autoSyncToFrontend = async function() {
+            console.log('🚀 开始真正的自动同步到前端...');
+            
+            // 显示加载状态
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '🔄 同步中...';
+            button.disabled = true;
             
             try {
-                const data = localStorage.getItem('cached_characters');
-                if (!data) {
-                    alert('❌ 没有角色数据可同步');
-                    return;
+                // 初始化同步API
+                if (!window.syncAPI) {
+                    window.syncAPI = new SyncAPI();
                 }
-
-                const allCharacters = JSON.parse(data);
-                const approvedCharacters = allCharacters.filter(c => 
-                    c.reviewStatus === 'approved' || c.isOfficial
-                );
-
-                if (approvedCharacters.length === 0) {
-                    alert('❌ 没有已审核通过的角色可同步');
-                    return;
+                
+                await window.syncAPI.init();
+                
+                // 执行自动同步
+                const success = await window.syncAPI.autoSyncToFrontend();
+                
+                if (success) {
+                    button.textContent = '✅ 同步成功';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                    }, 3000);
+                } else {
+                    button.textContent = '❌ 同步失败';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                    }, 3000);
                 }
-
-                // 生成同步代码
-                const syncCode = `// AIko Spark 自动同步 - ${new Date().toLocaleString()}
-console.log('🚀 开始同步 ${approvedCharacters.length} 个角色...');
-
-const newCharacters = ${JSON.stringify(approvedCharacters)};
-const existingData = localStorage.getItem('cached_characters');
-let allCharacters = existingData ? JSON.parse(existingData) : [];
-const existingIds = new Set(allCharacters.map(c => c.id));
-const newUniqueCharacters = newCharacters.filter(c => !existingIds.has(c.id));
-allCharacters = allCharacters.concat(newUniqueCharacters);
-localStorage.setItem('cached_characters', JSON.stringify(allCharacters));
-localStorage.setItem('characters_cache_time', Date.now().toString());
-localStorage.setItem('data_sync_timestamp', Date.now().toString());
-console.log('✅ 同步完成！新增: ' + newUniqueCharacters.length + ' 个，总计: ' + allCharacters.length + ' 个');
-alert('✅ 角色同步成功！\\n新增: ' + newUniqueCharacters.length + ' 个角色\\n总计: ' + allCharacters.length + ' 个角色\\n\\n请刷新页面查看更新');`;
-
-                // 复制到剪贴板
-                navigator.clipboard.writeText(syncCode).then(() => {
-                    // 打开前端应用
-                    const frontendUrl = 'http://localhost:8084'; // 根据实际情况调整
-                    window.open(frontendUrl, '_blank');
-                    
-                    alert(`✅ 同步代码已复制到剪贴板！
-                    
-🎯 下一步操作：
-1. 前端应用已在新标签页打开
-2. 在前端页面按 F12 打开控制台
-3. 切换到 Console 标签
-4. 粘贴代码（Ctrl+V）并按回车执行
-5. 看到成功提示后刷新页面
-
-将同步 ${approvedCharacters.length} 个已审核角色到前端！`);
-                    
-                }).catch(() => {
-                    alert(`❌ 自动复制失败，请手动复制以下代码到前端控制台执行：
-
-${syncCode}`);
-                });
                 
             } catch (error) {
-                console.error('❌ 同步失败:', error);
-                alert('❌ 同步失败: ' + error.message);
+                console.error('❌ 自动同步失败:', error);
+                button.textContent = '❌ 同步失败';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }, 3000);
             }
         };
         
