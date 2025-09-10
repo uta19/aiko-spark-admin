@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据同步到前端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .copy-button { transition: all 0.3s ease; }
+        .copy-button:hover { transform: translateY(-1px); }
+        .success { background: #10b981; }
+        .warning { background: #f59e0b; }
+        .error { background: #ef4444; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold mb-6 text-center">🔄 数据同步到前端应用</h1>
+            
+            <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+                <p class="text-blue-800">
+                    <strong>说明</strong>：由于后台管理系统和前端应用使用不同的域名，需要手动同步数据。
+                    这个工具会生成同步代码，你需要在前端应用中执行。
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- 步骤1：生成同步数据 -->
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3">📤 步骤1：生成同步数据</h3>
+                    <div class="space-y-3">
+                        <div class="text-sm text-gray-600">
+                            <div id="dataStats" class="mb-2">检测中...</div>
+                        </div>
+                        <button onclick="generateSyncData()" class="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">
+                            生成同步数据
+                        </button>
+                        <button onclick="copyToClipboard()" id="copyButton" class="w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 copy-button" disabled>
+                            📋 复制同步代码
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 步骤2：在前端执行 -->
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-semibold mb-3">📱 步骤2：在前端应用执行</h3>
+                    <div class="space-y-3">
+                        <div class="text-sm text-gray-600">
+                            <p>1. 打开前端应用</p>
+                            <p>2. 按F12打开开发者工具</p>
+                            <p>3. 切换到Console标签</p>
+                            <p>4. 粘贴并执行同步代码</p>
+                            <p>5. 刷新前端页面查看角色</p>
+                        </div>
+                        <button onclick="openFrontend()" class="w-full bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-700">
+                            🚀 打开前端应用
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 同步代码显示区域 -->
+            <div id="syncCodeArea" class="mt-6 hidden">
+                <h3 class="text-lg font-semibold mb-3">📋 同步代码（复制到前端控制台执行）</h3>
+                <div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
+                    <pre id="syncCode"></pre>
+                </div>
+                <div class="mt-3 text-sm text-gray-600">
+                    <p><strong>注意</strong>：请在前端应用的控制台中执行这段代码，不要在当前页面执行。</p>
+                </div>
+            </div>
+
+            <!-- 状态消息 -->
+            <div id="statusMessage" class="mt-4 p-3 rounded hidden"></div>
+
+            <!-- 详细统计 -->
+            <div id="detailedStats" class="mt-6 hidden">
+                <h3 class="text-lg font-semibold mb-3">📊 数据统计</h3>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div id="statsContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let syncDataGenerated = false;
+        let charactersData = [];
+
+        // 页面加载时检查数据
+        window.addEventListener('load', function() {
+            checkLocalData();
+        });
+
+        function checkLocalData() {
+            try {
+                const data = localStorage.getItem('cached_characters');
+                if (data) {
+                    charactersData = JSON.parse(data);
+                    const total = charactersData.length;
+                    const approved = charactersData.filter(c => c.reviewStatus === 'approved' || c.isOfficial).length;
+                    const pending = charactersData.filter(c => c.reviewStatus === 'pending').length;
+                    
+                    document.getElementById('dataStats').innerHTML = `
+                        <div class="text-green-600">✅ 检测到角色数据</div>
+                        <div>总数: ${total} | 已审核: ${approved} | 待审核: ${pending}</div>
+                    `;
+                } else {
+                    document.getElementById('dataStats').innerHTML = `
+                        <div class="text-red-600">❌ 未检测到角色数据</div>
+                        <div>请先在后台管理系统中导入角色</div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('dataStats').innerHTML = `
+                    <div class="text-red-600">❌ 数据读取失败</div>
+                    <div>${error.message}</div>
+                `;
+            }
+        }
+
+        function generateSyncData() {
+            try {
+                if (charactersData.length === 0) {
+                    showStatus('❌ 没有角色数据可同步', 'error');
+                    return;
+                }
+
+                // 只同步已审核通过的角色
+                const approvedCharacters = charactersData.filter(c => 
+                    c.reviewStatus === 'approved' || c.isOfficial
+                );
+
+                if (approvedCharacters.length === 0) {
+                    showStatus('❌ 没有已审核通过的角色可同步', 'warning');
+                    return;
+                }
+
+                // 生成同步代码
+                const syncCode = `// AIko Spark 角色数据同步
+console.log('🚀 开始同步角色数据...');
+
+// 角色数据
+const newCharacters = ${JSON.stringify(approvedCharacters, null, 2)};
+
+// 获取现有数据
+const existingData = localStorage.getItem('cached_characters');
+let allCharacters = existingData ? JSON.parse(existingData) : [];
+
+// 去重并合并（基于ID）
+const existingIds = new Set(allCharacters.map(c => c.id));
+const newUniqueCharacters = newCharacters.filter(c => !existingIds.has(c.id));
+
+// 合并数据
+allCharacters = allCharacters.concat(newUniqueCharacters);
+
+// 保存到localStorage
+localStorage.setItem('cached_characters', JSON.stringify(allCharacters));
+localStorage.setItem('characters_cache_time', Date.now().toString());
+localStorage.setItem('data_sync_timestamp', Date.now().toString());
+
+console.log(\`✅ 同步完成！\`);
+console.log(\`📊 新增角色: \${newUniqueCharacters.length} 个\`);
+console.log(\`📊 总角色数: \${allCharacters.length} 个\`);
+console.log('🔄 请刷新页面查看更新的角色列表');
+
+// 显示成功提示
+alert(\`角色数据同步成功！\\n新增: \${newUniqueCharacters.length} 个角色\\n总计: \${allCharacters.length} 个角色\\n\\n请刷新页面查看更新\`);`;
+
+                document.getElementById('syncCode').textContent = syncCode;
+                document.getElementById('syncCodeArea').classList.remove('hidden');
+                document.getElementById('copyButton').disabled = false;
+                
+                // 显示详细统计
+                showDetailedStats(approvedCharacters);
+                
+                syncDataGenerated = true;
+                showStatus(`✅ 同步代码生成成功！将同步 ${approvedCharacters.length} 个已审核角色`, 'success');
+                
+            } catch (error) {
+                showStatus(`❌ 生成同步代码失败: ${error.message}`, 'error');
+            }
+        }
+
+        function copyToClipboard() {
+            if (!syncDataGenerated) {
+                showStatus('❌ 请先生成同步数据', 'warning');
+                return;
+            }
+
+            const syncCode = document.getElementById('syncCode').textContent;
+            navigator.clipboard.writeText(syncCode).then(function() {
+                showStatus('✅ 同步代码已复制到剪贴板！请在前端应用控制台中执行', 'success');
+                
+                // 按钮动画效果
+                const button = document.getElementById('copyButton');
+                button.textContent = '✅ 已复制！';
+                setTimeout(() => {
+                    button.textContent = '📋 复制同步代码';
+                }, 2000);
+                
+            }).catch(function(err) {
+                showStatus('❌ 复制失败，请手动复制代码', 'error');
+            });
+        }
+
+        function openFrontend() {
+            // 尝试打开前端应用（需要根据实际URL调整）
+            const frontendUrls = [
+                'http://localhost:8084',
+                'http://localhost:5173',
+                'http://localhost:3000',
+                'https://aiko-spark-sync.vercel.app'
+            ];
+            
+            showStatus('🚀 正在尝试打开前端应用...', 'info');
+            
+            // 打开第一个可能的URL
+            window.open(frontendUrls[0], '_blank');
+            
+            setTimeout(() => {
+                showStatus('💡 如果页面没有打开，请手动访问前端应用地址', 'warning');
+            }, 2000);
+        }
+
+        function showDetailedStats(approvedCharacters) {
+            const typeStats = {};
+            const sourceStats = {};
+            
+            approvedCharacters.forEach(char => {
+                typeStats[char.type || '未知'] = (typeStats[char.type || '未知'] || 0) + 1;
+                sourceStats[char.source || '未知'] = (sourceStats[char.source || '未知'] || 0) + 1;
+            });
+            
+            let statsHtml = `
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <h4 class="font-semibold mb-2">按类型分布</h4>
+                        <div class="space-y-1 text-sm">
+            `;
+            
+            Object.entries(typeStats).forEach(([type, count]) => {
+                statsHtml += `<div>${type}: ${count} 个</div>`;
+            });
+            
+            statsHtml += `
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold mb-2">按来源分布</h4>
+                        <div class="space-y-1 text-sm">
+            `;
+            
+            Object.entries(sourceStats).slice(0, 10).forEach(([source, count]) => {
+                statsHtml += `<div>${source}: ${count} 个</div>`;
+            });
+            
+            statsHtml += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('statsContent').innerHTML = statsHtml;
+            document.getElementById('detailedStats').classList.remove('hidden');
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `mt-4 p-3 rounded ${type}`;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
