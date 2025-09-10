@@ -258,6 +258,128 @@
             // 更新统计数据
             updateStats();
         };
+
+        // 统计更新函数
+        window.updateStats = function() {
+            try {
+                const data = localStorage.getItem('cached_characters');
+                if (data) {
+                    const characters = JSON.parse(data);
+                    const pending = characters.filter(c => c.reviewStatus === 'pending').length;
+                    const approved = characters.filter(c => c.reviewStatus === 'approved' || c.isOfficial).length;
+                    
+                    document.getElementById('totalCharacters').textContent = characters.length;
+                    document.getElementById('pendingCharacters').textContent = pending;
+                    document.getElementById('approvedCharacters').textContent = approved;
+                }
+            } catch (error) {
+                console.error('统计更新失败:', error);
+            }
+        };
+
+        // 一键审核通过函数
+        window.approveAllPending = function() {
+            console.log('🔍 执行批量审核...');
+            if (window.adminSystem && window.adminSystem.approveAllPending) {
+                window.adminSystem.approveAllPending();
+                setTimeout(updateStats, 1000);
+            } else {
+                console.error('审核函数未找到');
+            }
+        };
+
+        // 选项卡切换
+        window.switchTab = function(tabName) {
+            console.log('🔄 切换选项卡:', tabName);
+            // 隐藏所有选项卡内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // 移除所有按钮的活动状态
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = btn.className.replace('border-blue-500 text-blue-600', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300');
+            });
+            
+            // 显示选中的选项卡
+            document.getElementById(tabName + 'Tab').style.display = 'block';
+            
+            // 激活选中的按钮
+            event.target.className = event.target.className.replace('border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'border-blue-500 text-blue-600');
+        };
+
+        // CSV解析函数
+        window.parseCSV = function() {
+            console.log('📄 开始CSV解析...');
+            if (window.adminSystem && window.adminSystem.handleFileUpload) {
+                const fileInput = document.getElementById('csvFile');
+                if (fileInput.files.length > 0) {
+                    console.log('📁 文件已选择:', fileInput.files[0].name);
+                    window.adminSystem.handleFileUpload({ target: fileInput });
+                } else {
+                    alert('请先选择CSV文件');
+                    console.warn('⚠️ 没有选择文件');
+                }
+            } else {
+                console.error('❌ AdminSystem未初始化或handleFileUpload函数不存在');
+                alert('系统未正确初始化，请刷新页面重试');
+            }
+        };
+
+        // 飞书解析函数
+        window.parseFeishu = function() {
+            const url = document.getElementById('feishuUrl').value;
+            if (url) {
+                alert('飞书文档解析功能开发中，请使用CSV导入');
+            } else {
+                alert('请输入飞书文档链接');
+            }
+        };
+
+        // JSON解析函数
+        window.parseJSON = function() {
+            console.log('📝 开始JSON解析...');
+            const jsonData = document.getElementById('jsonData').value;
+            if (jsonData) {
+                try {
+                    const data = JSON.parse(jsonData);
+                    if (window.adminSystem) {
+                        window.adminSystem.parsedData = Array.isArray(data) ? data : [data];
+                        window.adminSystem.renderPreview();
+                        console.log('✅ JSON解析成功，数据条数:', window.adminSystem.parsedData.length);
+                    } else {
+                        console.error('❌ AdminSystem未初始化');
+                        alert('系统未正确初始化，请刷新页面重试');
+                    }
+                } catch (error) {
+                    console.error('❌ JSON解析错误:', error);
+                    alert('JSON格式错误: ' + error.message);
+                }
+            } else {
+                alert('请输入JSON数据');
+            }
+        };
+
+        // 确认导入
+        window.confirmImport = function() {
+            console.log('✅ 确认导入角色数据...');
+            if (window.adminSystem && window.adminSystem.importCharacters) {
+                window.adminSystem.importCharacters();
+                setTimeout(updateStats, 1000);
+            } else {
+                console.error('❌ 导入函数不存在');
+                alert('系统未正确初始化，请刷新页面重试');
+            }
+        };
+
+        // 取消导入
+        window.cancelImport = function() {
+            console.log('❌ 取消导入');
+            document.getElementById('dataPreview').style.display = 'none';
+            if (window.adminSystem) {
+                window.adminSystem.parsedData = [];
+            }
+        };
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', () => {
