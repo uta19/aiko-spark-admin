@@ -250,9 +250,163 @@
             document.getElementById('accessControl').style.display = 'none';
             document.getElementById('mainContent').style.display = 'block';
             
-            // 初始化管理系统
+            // 初始化管理系统（安全模式）
             if (!window.adminSystem) {
-                window.adminSystem = new AdminSystem();
+                try {
+                    window.adminSystem = new AdminSystem();
+                    console.log('✅ AdminSystem 初始化成功');
+                } catch (error) {
+                    console.error('❌ AdminSystem 初始化失败:', error);
+                    // 创建一个简化的管理系统对象
+                    window.adminSystem = {
+                        parsedData: [],
+                        handleFileUpload: function(event) {
+                            console.log('📄 处理文件上传...');
+                            const file = event.target.files[0];
+                            if (!file) return;
+                            
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const content = e.target.result;
+                                console.log('📝 文件内容读取完成');
+                                
+                                // 简单的CSV解析
+                                if (file.name.toLowerCase().endsWith('.csv')) {
+                                    try {
+                                        const lines = content.split('\n').filter(line => line.trim());
+                                        const headers = lines[0].split(',');
+                                        const data = [];
+                                        
+                                        for (let i = 1; i < lines.length; i++) {
+                                            const values = lines[i].split(',');
+                                            if (values.length >= headers.length) {
+                                                const character = {
+                                                    id: 'imported_' + Date.now() + '_' + i,
+                                                    name: values[0] || '未知角色',
+                                                    description: values[1] || '暂无描述',
+                                                    personality: values[2] || '',
+                                                    prompt: values[3] || '',
+                                                    tags: values[4] ? values[4].split(';') : [],
+                                                    type: values[5] || '其他',
+                                                    source: values[6] || '导入',
+                                                    creator: values[7] || '未知',
+                                                    imageUrl: values[8] || '',
+                                                    isOfficial: values[9] === '是' || values[9] === 'true',
+                                                    isFavorited: values[10] === '是' || values[10] === 'true',
+                                                    reviewStatus: 'pending',
+                                                    category: 'community'
+                                                };
+                                                data.push(character);
+                                            }
+                                        }
+                                        
+                                        this.parsedData = data;
+                                        console.log('✅ CSV解析成功，角色数量:', data.length);
+                                        this.renderPreview();
+                                        
+                                    } catch (error) {
+                                        console.error('❌ CSV解析失败:', error);
+                                        alert('CSV解析失败: ' + error.message);
+                                    }
+                                }
+                            };
+                            reader.readAsText(file);
+                        },
+                        renderPreview: function() {
+                            console.log('🖼️ 渲染数据预览...');
+                            const previewDiv = document.getElementById('dataPreview');
+                            const contentDiv = document.getElementById('previewContent');
+                            
+                            if (this.parsedData && this.parsedData.length > 0) {
+                                let html = `<div class="mb-4"><h4 class="font-semibold">预览数据 (${this.parsedData.length} 个角色)</h4></div>`;
+                                html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+                                
+                                this.parsedData.slice(0, 6).forEach(char => {
+                                    html += `
+                                        <div class="border rounded p-3">
+                                            <h5 class="font-medium">${char.name}</h5>
+                                            <p class="text-sm text-gray-600 truncate">${char.description}</p>
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                类型: ${char.type} | 来源: ${char.source}
+                                            </div>
+                                        </div>
+                                    `;
+                                });
+                                
+                                if (this.parsedData.length > 6) {
+                                    html += `<div class="border rounded p-3 flex items-center justify-center text-gray-500">还有 ${this.parsedData.length - 6} 个角色...</div>`;
+                                }
+                                html += '</div>';
+                                
+                                contentDiv.innerHTML = html;
+                                previewDiv.style.display = 'block';
+                            }
+                        },
+                        importCharacters: function() {
+                            console.log('💾 开始导入角色...');
+                            if (this.parsedData && this.parsedData.length > 0) {
+                                try {
+                                    // 获取现有数据
+                                    const existingData = localStorage.getItem('cached_characters');
+                                    let characters = existingData ? JSON.parse(existingData) : [];
+                                    
+                                    // 添加新角色
+                                    characters = characters.concat(this.parsedData);
+                                    
+                                    // 保存到localStorage
+                                    localStorage.setItem('cached_characters', JSON.stringify(characters));
+                                    localStorage.setItem('characters_cache_time', Date.now().toString());
+                                    
+                                    // 触发同步
+                                    localStorage.setItem('data_sync_timestamp', Date.now().toString());
+                                    
+                                    console.log('✅ 角色导入成功，总数:', characters.length);
+                                    alert(`成功导入 ${this.parsedData.length} 个角色！`);
+                                    
+                                    // 清理预览
+                                    this.parsedData = [];
+                                    document.getElementById('dataPreview').style.display = 'none';
+                                    
+                                    // 更新统计
+                                    setTimeout(updateStats, 500);
+                                    
+                                } catch (error) {
+                                    console.error('❌ 导入失败:', error);
+                                    alert('导入失败: ' + error.message);
+                                }
+                            }
+                        },
+                        approveAllPending: function() {
+                            console.log('🔍 批量审核通过...');
+                            try {
+                                const data = localStorage.getItem('cached_characters');
+                                if (data) {
+                                    const characters = JSON.parse(data);
+                                    let approvedCount = 0;
+                                    
+                                    characters.forEach(char => {
+                                        if (char.reviewStatus === 'pending') {
+                                            char.reviewStatus = 'approved';
+                                            approvedCount++;
+                                        }
+                                    });
+                                    
+                                    localStorage.setItem('cached_characters', JSON.stringify(characters));
+                                    localStorage.setItem('data_sync_timestamp', Date.now().toString());
+                                    
+                                    console.log(`✅ 批量审核完成，通过 ${approvedCount} 个角色`);
+                                    alert(`成功审核通过 ${approvedCount} 个角色！`);
+                                    
+                                    setTimeout(updateStats, 500);
+                                }
+                            } catch (error) {
+                                console.error('❌ 批量审核失败:', error);
+                                alert('批量审核失败: ' + error.message);
+                            }
+                        }
+                    };
+                    console.log('✅ 备用管理系统创建成功');
+                }
             }
             
             // 更新统计数据
