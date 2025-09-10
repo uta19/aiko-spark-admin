@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIko Spark 后台管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white text-xl font-bold">AIko Spark 后台管理</h1>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-white text-sm">在线版本 v1.0</span>
+                    <div class="h-6 w-6 bg-green-400 rounded-full animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <!-- 访问控制 -->
+        <div id="accessControl" class="mb-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                        <i data-lucide="shield-check" class="inline h-5 w-5 mr-2"></i>
+                        访问验证
+                    </h3>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">请输入访问密码：</label>
+                        <input type="password" id="accessPassword" placeholder="请输入密码" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button onclick="checkAccess()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        验证访问权限
+                    </button>
+                    <div id="accessMessage" class="mt-2 text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要内容（初始隐藏） -->
+        <div id="mainContent" style="display: none;">
+            <!-- 统计卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="users" class="h-6 w-6 text-blue-400"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">总角色数</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="totalCharacters">0</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="clock" class="h-6 w-6 text-yellow-400"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">待审核</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="pendingCharacters">0</dd>
+                                </dl>
+                                <button onclick="approveAllPending()" class="mt-2 text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">一键通过</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="check-circle" class="h-6 w-6 text-green-400"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">已通过</dt>
+                                    <dd class="text-lg font-medium text-gray-900" id="approvedCharacters">0</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
+                    <div class="p-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i data-lucide="activity" class="h-6 w-6 text-purple-400"></i>
+                            </div>
+                            <div class="ml-5 w-0 flex-1">
+                                <dl>
+                                    <dt class="text-sm font-medium text-gray-500 truncate">系统状态</dt>
+                                    <dd class="text-lg font-medium text-green-600">在线</dd>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 功能选项卡 -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
+                        <button onclick="switchTab('csv')" class="tab-btn border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                            CSV导入
+                        </button>
+                        <button onclick="switchTab('feishu')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                            飞书导入
+                        </button>
+                        <button onclick="switchTab('json')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                            JSON导入
+                        </button>
+                        <button onclick="switchTab('history')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                            导入历史
+                        </button>
+                    </nav>
+                </div>
+
+                <div class="p-6">
+                    <!-- CSV导入 -->
+                    <div id="csvTab" class="tab-content">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                选择CSV文件
+                            </label>
+                            <input type="file" id="csvFile" accept=".csv" 
+                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        </div>
+                        <button onclick="parseCSV()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                            解析CSV文件
+                        </button>
+                    </div>
+
+                    <!-- 飞书导入 -->
+                    <div id="feishuTab" class="tab-content" style="display: none;">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                飞书文档链接
+                            </label>
+                            <input type="url" id="feishuUrl" placeholder="https://xxx.feishu.cn/wiki/..." 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <button onclick="parseFeishu()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                            解析飞书文档
+                        </button>
+                    </div>
+
+                    <!-- JSON导入 -->
+                    <div id="jsonTab" class="tab-content" style="display: none;">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                JSON数据
+                            </label>
+                            <textarea id="jsonData" rows="6" placeholder="粘贴JSON格式的角色数据..." 
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                        <button onclick="parseJSON()" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">
+                            解析JSON数据
+                        </button>
+                    </div>
+
+                    <!-- 导入历史 -->
+                    <div id="historyTab" class="tab-content" style="display: none;">
+                        <div id="importHistory">
+                            <p class="text-gray-500">暂无导入历史</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据预览 -->
+            <div id="dataPreview" class="mt-8 bg-white shadow rounded-lg" style="display: none;">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">数据预览</h3>
+                    <p class="mt-1 max-w-2xl text-sm text-gray-500">预览即将导入的角色数据</p>
+                </div>
+                <div class="px-4 py-5 sm:p-6">
+                    <div id="previewContent"></div>
+                    <div class="mt-6 flex space-x-3">
+                        <button onclick="confirmImport()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                            确认导入
+                        </button>
+                        <button onclick="cancelImport()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知系统 -->
+    <div id="notifications" class="fixed top-4 right-4 z-50"></div>
+
+    <script src="admin.js"></script>
+    <script>
+        // 初始化图标
+        lucide.createIcons();
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 AIko Spark 后台管理系统启动（在线版本）');
+            // 检查是否已经验证过访问权限
+            if (localStorage.getItem('admin_access_granted') === 'true') {
+                showMainContent();
+            }
+        });
+    </script>
+</body>
+</html>
