@@ -265,6 +265,7 @@
                             const file = event.target.files[0];
                             if (!file) return;
                             
+                            const self = this; // 保存this上下文
                             const reader = new FileReader();
                             reader.onload = function(e) {
                                 const content = e.target.result;
@@ -300,9 +301,9 @@
                                             }
                                         }
                                         
-                                        this.parsedData = data;
+                                        self.parsedData = data; // 使用self
                                         console.log('✅ CSV解析成功，角色数量:', data.length);
-                                        this.renderPreview();
+                                        self.renderPreview(); // 使用self
                                         
                                     } catch (error) {
                                         console.error('❌ CSV解析失败:', error);
