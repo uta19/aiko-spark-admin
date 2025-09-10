@@ -225,6 +225,40 @@
         // 初始化图标
         lucide.createIcons();
         
+        // 确保函数在全局作用域
+        window.checkAccess = function() {
+            console.log('🔐 开始验证访问权限...');
+            const password = document.getElementById('accessPassword').value;
+            const messageDiv = document.getElementById('accessMessage');
+            
+            console.log('输入的密码:', password);
+            
+            // 简单的密码验证
+            if (password === 'aiko2024' || password === 'admin123') {
+                console.log('✅ 密码验证成功');
+                localStorage.setItem('admin_access_granted', 'true');
+                showMainContent();
+                messageDiv.innerHTML = '<span class="text-green-600">✅ 访问权限验证成功</span>';
+            } else {
+                console.log('❌ 密码验证失败');
+                messageDiv.innerHTML = '<span class="text-red-600">❌ 密码错误，请重试</span>';
+            }
+        };
+        
+        window.showMainContent = function() {
+            console.log('🎯 显示主要内容...');
+            document.getElementById('accessControl').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            
+            // 初始化管理系统
+            if (!window.adminSystem) {
+                window.adminSystem = new AdminSystem();
+            }
+            
+            // 更新统计数据
+            updateStats();
+        };
+        
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 AIko Spark 后台管理系统启动（在线版本）');
