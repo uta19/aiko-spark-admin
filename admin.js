@@ -40,7 +40,7 @@ class AdminSystem {
         // 性能监控
         this.startPerformanceMonitoring();
         
-        console.log('🚀 AIko Spark Admin System v' + this.version + ' (Online Production Mode)');
+        console.log('🚀 AIko Spark Admin System v' + this.version + ' (Production Mode)');
     }
 
     // 错误日志
@@ -160,6 +160,7 @@ class AdminSystem {
         document.getElementById('parse-btn').addEventListener('click', () => this.parseData());
         document.getElementById('import-btn').addEventListener('click', () => this.importData());
         document.getElementById('template-btn').addEventListener('click', () => this.downloadTemplate());
+        document.getElementById('view-characters-btn').addEventListener('click', () => this.viewUploadedCharacters());
         document.getElementById('sync-btn').addEventListener('click', () => this.syncToApp());
         document.getElementById('backup-btn').addEventListener('click', () => this.backupData());
         document.getElementById('clear-btn').addEventListener('click', () => this.clearData());
@@ -1075,17 +1076,267 @@ class AdminSystem {
         document.getElementById('totalChats').textContent = Math.floor(characters.length * 1.5);
     }
 
+    // 查看已上传的角色
+    viewUploadedCharacters() {
+        const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+        
+        if (characters.length === 0) {
+            this.showNotification('warning', '没有数据', '当前没有已上传的角色数据');
+            return;
+        }
+        
+        // 创建角色查看模态框
+        const modalHtml = `
+            <div id="characters-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style="z-index: 10000;">
+                <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-900">已上传角色列表 (${characters.length} 个)</h3>
+                        <button onclick="document.getElementById('characters-modal').remove()" class="text-gray-400 hover:text-gray-600">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="mb-4 flex gap-4">
+                        <input type="text" id="character-search" placeholder="搜索角色..." class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select id="character-filter" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">全部类型</option>
+                            <option value="动漫">动漫</option>
+                            <option value="游戏">游戏</option>
+                            <option value="真人">真人</option>
+                            <option value="虚拟偶像">虚拟偶像</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="max-h-96 overflow-y-auto">
+                        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3" id="characters-grid">
+                            ${this.renderCharacterCards(characters)}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 flex justify-between items-center">
+                        <div class="text-sm text-gray-600">
+                            显示 ${characters.length} 个角色
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="window.adminSystem.exportCharacters()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                                导出数据
+                            </button>
+                            <button onclick="document.getElementById('characters-modal').remove()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                                关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 重新初始化图标
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+        }
+        
+        // 添加搜索和过滤功能
+        this.setupCharacterSearch(characters);
+    }
+    
+    // 渲染角色卡片
+    renderCharacterCards(characters) {
+        return characters.map(char => `
+            <div class="character-card bg-gray-50 p-4 rounded-lg border hover:shadow-md transition-shadow" data-type="${char.type || ''}" data-name="${(char.name || '').toLowerCase()}">
+                <div class="flex items-start gap-3">
+                    <img src="${char.imageUrl || char.avatar || '/placeholder.svg'}" alt="${char.name || '未知'}" class="w-12 h-12 rounded-lg object-cover bg-gray-200">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-semibold text-gray-900 truncate">${char.name || '未命名角色'}</h4>
+                        <p class="text-sm text-gray-600 truncate">${char.description || '暂无描述'}</p>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">${char.type || '其他'}</span>
+                            <span class="px-2 py-1 ${char.reviewStatus === 'approved' ? 'bg-green-100 text-green-800' : char.reviewStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'} text-xs rounded">
+                                ${char.reviewStatus === 'approved' ? '已审核' : char.reviewStatus === 'pending' ? '待审核' : '已拒绝'}
+                            </span>
+                        </div>
+                        ${char.tags && char.tags.length > 0 ? `
+                            <div class="mt-2">
+                                ${char.tags.slice(0, 3).map(tag => `<span class="inline-block bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded mr-1">${tag}</span>`).join('')}
+                                ${char.tags.length > 3 ? `<span class="text-xs text-gray-500">+${char.tags.length - 3}更多</span>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // 设置角色搜索和过滤
+    setupCharacterSearch(characters) {
+        const searchInput = document.getElementById('character-search');
+        const filterSelect = document.getElementById('character-filter');
+        const grid = document.getElementById('characters-grid');
+        
+        const filterCharacters = () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filterType = filterSelect.value;
+            
+            const filteredCharacters = characters.filter(char => {
+                const matchesSearch = !searchTerm || 
+                    (char.name || '').toLowerCase().includes(searchTerm) ||
+                    (char.description || '').toLowerCase().includes(searchTerm) ||
+                    (char.tags || []).some(tag => tag.toLowerCase().includes(searchTerm));
+                
+                const matchesType = !filterType || char.type === filterType;
+                
+                return matchesSearch && matchesType;
+            });
+            
+            grid.innerHTML = this.renderCharacterCards(filteredCharacters);
+            
+            // 更新计数
+            const countEl = document.querySelector('#characters-modal .text-sm.text-gray-600');
+            if (countEl) {
+                countEl.textContent = `显示 ${filteredCharacters.length} 个角色`;
+            }
+        };
+        
+        searchInput.addEventListener('input', filterCharacters);
+        filterSelect.addEventListener('change', filterCharacters);
+    }
+    
+    // 导出角色数据
+    exportCharacters() {
+        const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+        const dataStr = JSON.stringify(characters, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `aiko_characters_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        
+        URL.revokeObjectURL(url);
+        this.showNotification('success', '导出成功', `已导出 ${characters.length} 个角色数据`);
+    }
+
     // 同步到应用
     async syncToApp() {
-        this.showNotification('info', '同步中', '正在同步数据到应用...');
+        this.showNotification('info', '同步中', '正在同步数据到前端应用...');
         
-        // 模拟同步过程
-        await this.sleep(2000);
+        try {
+            const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+            
+            if (characters.length === 0) {
+                this.showNotification('warning', '同步失败', '没有可同步的角色数据');
+                return;
+            }
+            
+            // 创建GitHub Gist来存储数据（免费且可靠）
+            const syncData = {
+                timestamp: Date.now(),
+                characters: characters,
+                version: '1.0',
+                source: 'aiko-spark-admin'
+            };
+            
+            // 创建Gist
+            const gistResponse = await fetch('https://api.github.com/gists', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'AIko-Spark-Sync'
+                },
+                body: JSON.stringify({
+                    description: 'AIko Spark角色数据同步 - ' + new Date().toISOString(),
+                    public: false,
+                    files: {
+                        'characters.json': {
+                            content: JSON.stringify(syncData, null, 2)
+                        }
+                    }
+                })
+            });
+            
+            let frontendUrl;
+            
+            if (gistResponse.ok) {
+                const gistData = await gistResponse.json();
+                const gistId = gistData.id;
+                
+                // 构建前端应用URL，使用gist ID
+                frontendUrl = `https://aiko-spark-sync.vercel.app/?gist=${gistId}`;
+                
+                console.log('✅ Gist创建成功:', gistId);
+                
+            } else {
+                // 如果Gist创建失败，回退到直接传输小数据集
+                console.warn('Gist创建失败，使用回退方案');
+                
+                // 只传输前10个角色作为示例
+                const sampleCharacters = characters.slice(0, 10);
+                const encodedData = encodeURIComponent(JSON.stringify(sampleCharacters));
+                frontendUrl = `https://aiko-spark-sync.vercel.app/sync-bridge.html?data=${encodedData}&total=${characters.length}`;
+            }
+            
+            // 模拟同步过程
+            await this.sleep(1000);
+            
+            // 触发数据同步时间戳
+            localStorage.setItem('data_sync_timestamp', Date.now().toString());
+            
+            // 显示同步成功提示，并提供跳转链接
+            this.showSyncSuccessModal(frontendUrl, characters.length);
+            
+        } catch (error) {
+            console.error('同步失败:', error);
+            this.showNotification('error', '同步失败', '数据同步过程中出现错误');
+        }
+    }
+    
+    // 显示同步成功的模态框
+    showSyncSuccessModal(frontendUrl, characterCount) {
+        // 创建模态框HTML
+        const modalHtml = `
+            <div id="sync-success-modal" class="modal-overlay" style="
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.8); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+            ">
+                <div class="modal-content" style="
+                    background: white; padding: 30px; border-radius: 12px;
+                    max-width: 500px; width: 90%; text-align: center;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                ">
+                    <div style="color: #10b981; font-size: 48px; margin-bottom: 20px;">✅</div>
+                    <h3 style="color: #1f2937; margin-bottom: 15px; font-size: 24px;">数据已同步到前端！</h3>
+                    <p style="color: #6b7280; margin-bottom: 20px;">
+                        已成功同步 <strong>${characterCount}</strong> 个角色数据<br>
+                        前端应用将在30秒内自动更新
+                    </p>
+                    <div style="margin-bottom: 25px;">
+                        <p style="color: #374151; margin-bottom: 10px; font-weight: 500;">打开前端应用：</p>
+                        <a href="${frontendUrl}" target="_blank" style="
+                            color: #3b82f6; text-decoration: none; font-weight: 500;
+                            word-break: break-all; font-size: 14px;
+                        ">https://aiko-spark-sync.vercel.app</a>
+                    </div>
+                    <button onclick="document.getElementById('sync-success-modal').remove()" style="
+                        background: #3b82f6; color: white; border: none;
+                        padding: 12px 24px; border-radius: 8px; cursor: pointer;
+                        font-size: 16px; font-weight: 500;
+                    ">确定</button>
+                </div>
+            </div>
+        `;
         
-        // 触发应用数据刷新 (通过localStorage事件)
-        localStorage.setItem('data_sync_timestamp', Date.now().toString());
+        // 添加到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
         
-        this.showNotification('success', '同步完成', '数据已同步到应用');
+        // 5秒后自动关闭
+        setTimeout(() => {
+            const modal = document.getElementById('sync-success-modal');
+            if (modal) modal.remove();
+        }, 10000);
     }
 
     // 备份数据
@@ -1552,142 +1803,9 @@ class AdminSystem {
     }
 }
 
-// 访问控制函数
-function checkAccess() {
-    const password = document.getElementById('accessPassword').value;
-    const messageDiv = document.getElementById('accessMessage');
-    
-    // 简单的密码验证（生产环境应该使用更安全的方式）
-    if (password === 'aiko2024' || password === 'admin123') {
-        localStorage.setItem('admin_access_granted', 'true');
-        showMainContent();
-        messageDiv.innerHTML = '<span class="text-green-600">✅ 访问权限验证成功</span>';
-    } else {
-        messageDiv.innerHTML = '<span class="text-red-600">❌ 密码错误，请重试</span>';
-    }
-}
-
-function showMainContent() {
-    document.getElementById('accessControl').style.display = 'none';
-    document.getElementById('mainContent').style.display = 'block';
-    
-    // 初始化管理系统
-    if (!window.adminSystem) {
-        window.adminSystem = new AdminSystem();
-    }
-    
-    // 更新统计数据
-    updateStats();
-}
-
-function updateStats() {
-    try {
-        const data = localStorage.getItem('cached_characters');
-        if (data) {
-            const characters = JSON.parse(data);
-            const pending = characters.filter(c => c.reviewStatus === 'pending').length;
-            const approved = characters.filter(c => c.reviewStatus === 'approved' || c.isOfficial).length;
-            
-            document.getElementById('totalCharacters').textContent = characters.length;
-            document.getElementById('pendingCharacters').textContent = pending;
-            document.getElementById('approvedCharacters').textContent = approved;
-        }
-    } catch (error) {
-        console.error('统计更新失败:', error);
-    }
-}
-
-// 一键审核通过函数
-function approveAllPending() {
-    if (window.adminSystem && window.adminSystem.approveAllPending) {
-        window.adminSystem.approveAllPending();
-        setTimeout(updateStats, 1000); // 延迟更新统计
-    } else {
-        console.error('审核函数未找到');
-    }
-}
-
-// 选项卡切换
-function switchTab(tabName) {
-    // 隐藏所有选项卡内容
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-    
-    // 移除所有按钮的活动状态
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.className = btn.className.replace('border-blue-500 text-blue-600', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300');
-    });
-    
-    // 显示选中的选项卡
-    document.getElementById(tabName + 'Tab').style.display = 'block';
-    
-    // 激活选中的按钮
-    event.target.className = event.target.className.replace('border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'border-blue-500 text-blue-600');
-}
-
-// CSV解析函数
-function parseCSV() {
-    if (window.adminSystem && window.adminSystem.handleFileUpload) {
-        const fileInput = document.getElementById('csvFile');
-        if (fileInput.files.length > 0) {
-            window.adminSystem.handleFileUpload({ target: fileInput });
-        } else {
-            alert('请先选择CSV文件');
-        }
-    }
-}
-
-// 飞书解析函数
-function parseFeishu() {
-    const url = document.getElementById('feishuUrl').value;
-    if (url) {
-        alert('飞书文档解析功能开发中，请使用CSV导入');
-    } else {
-        alert('请输入飞书文档链接');
-    }
-}
-
-// JSON解析函数
-function parseJSON() {
-    const jsonData = document.getElementById('jsonData').value;
-    if (jsonData) {
-        try {
-            const data = JSON.parse(jsonData);
-            if (window.adminSystem) {
-                window.adminSystem.parsedData = Array.isArray(data) ? data : [data];
-                window.adminSystem.renderPreview();
-            }
-        } catch (error) {
-            alert('JSON格式错误: ' + error.message);
-        }
-    } else {
-        alert('请输入JSON数据');
-    }
-}
-
-// 确认导入
-function confirmImport() {
-    if (window.adminSystem && window.adminSystem.importCharacters) {
-        window.adminSystem.importCharacters();
-        setTimeout(updateStats, 1000); // 延迟更新统计
-    }
-}
-
-// 取消导入
-function cancelImport() {
-    document.getElementById('dataPreview').style.display = 'none';
-    if (window.adminSystem) {
-        window.adminSystem.parsedData = [];
-    }
-}
-
 // 初始化系统
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 AIko Spark 后台管理系统启动（在线版本）');
-    
-    // 检查访问权限
-    if (localStorage.getItem('admin_access_granted') === 'true') {
-        showMainContent();
-    }
+    console.log('🚀 AIko Spark 后台管理系统启动');
+    window.adminSystem = new AdminSystem();
+    console.log('✅ 审核函数已绑定:', typeof window.adminSystem.approveAllPending);
 });

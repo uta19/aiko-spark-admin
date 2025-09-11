@@ -6,548 +6,328 @@
     <title>AIko Spark 后台管理系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- 访问控制 -->
+    <script>
+        // 简单的访问控制 (生产环境建议使用更安全的方案)
+        (function() {
+            const isProduction = window.location.hostname !== 'localhost' && 
+                               window.location.hostname !== '127.0.0.1';
+            
+            if (isProduction) {
+                const ADMIN_KEY = 'aiko_admin_2024';
+                const stored = sessionStorage.getItem('admin_authenticated');
+                
+                if (stored !== ADMIN_KEY) {
+                    const key = prompt('🔐 AIko Spark 后台管理系统\n\n请输入访问密钥:');
+                    if (key !== ADMIN_KEY) {
+                        alert('❌ 访问密钥错误');
+                        document.body.innerHTML = '<div style="text-align:center;margin-top:200px;font-size:24px;color:#666;">访问被拒绝</div>';
+                        return;
+                    }
+                    sessionStorage.setItem('admin_authenticated', ADMIN_KEY);
+                }
+                
+                // 添加退出登录功能
+                window.adminLogout = function() {
+                    if (confirm('确定要退出登录吗？')) {
+                        sessionStorage.removeItem('admin_authenticated');
+                        location.reload();
+                    }
+                };
+            }
+        })();
+    </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <!-- 导航栏 -->
-    <nav class="gradient-bg shadow-lg">
+    <nav class="bg-white shadow-sm border-b">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
+            <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <h1 class="text-white text-xl font-bold">AIko Spark 后台管理</h1>
+                        <h1 class="text-2xl font-bold text-gray-900">AIko Spark</h1>
+                        <p class="text-sm text-gray-500">后台管理系统</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <span class="text-white text-sm">在线版本 v1.1</span>
-                    <div class="h-6 w-6 bg-green-400 rounded-full animate-pulse"></div>
+                    <span class="text-sm text-gray-500">管理员</span>
+                    <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">A</span>
+                    </div>
+                    <button onclick="window.adminLogout && window.adminLogout()" class="text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100" title="退出登录">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
                 </div>
             </div>
         </div>
     </nav>
 
+    <!-- 主内容区 -->
     <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <!-- 访问控制 -->
-        <div id="accessControl" class="mb-8">
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-                        <i data-lucide="shield-check" class="inline h-5 w-5 mr-2"></i>
-                        访问验证
-                    </h3>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">请输入访问密码：</label>
-                        <input type="password" id="accessPassword" placeholder="请输入密码" 
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i data-lucide="users" class="h-6 w-6 text-gray-400"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">总角色数</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="totalCharacters">0</dd>
+                            </dl>
+                        </div>
                     </div>
-                    <button onclick="checkAccess()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                        验证访问权限
-                    </button>
-                    <div id="accessMessage" class="mt-2 text-sm"></div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i data-lucide="check-circle" class="h-6 w-6 text-green-400"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">已审核</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="approvedCharacters">0</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i data-lucide="clock" class="h-6 w-6 text-yellow-400"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">待审核</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="pendingCharacters">0</dd>
+                            </dl>
+                            <button onclick="window.adminSystem && window.adminSystem.approveAllPending ? window.adminSystem.approveAllPending() : console.error('审核函数未找到')" class="mt-2 text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">一键通过</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i data-lucide="message-square" class="h-6 w-6 text-blue-400"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">对话次数</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="totalChats">0</dd>
+                            </dl>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- 主要内容（初始隐藏） -->
-        <div id="mainContent" style="display: none;">
-            <!-- 统计卡片 -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
-                    <div class="p-5">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <i data-lucide="users" class="h-6 w-6 text-blue-400"></i>
+        <!-- 主要功能区 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 角色导入 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            <i data-lucide="upload" class="inline-block w-5 h-5 mr-2"></i>
+                            角色库批量导入
+                        </h3>
+                        
+                        <!-- 导入方式选择 -->
+                        <div class="mb-6">
+                            <div class="sm:hidden">
+                                <select id="import-tabs" class="block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="csv">CSV格式</option>
+                                    <option value="feishu">飞书格式</option>
+                                    <option value="json">JSON格式</option>
+                                </select>
                             </div>
-                            <div class="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">总角色数</dt>
-                                    <dd class="text-lg font-medium text-gray-900" id="totalCharacters">0</dd>
-                                </dl>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
-                    <div class="p-5">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <i data-lucide="clock" class="h-6 w-6 text-yellow-400"></i>
-                            </div>
-                            <div class="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">待审核</dt>
-                                    <dd class="text-lg font-medium text-gray-900" id="pendingCharacters">0</dd>
-                                </dl>
-                                <button onclick="approveAllPending()" class="mt-2 text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">一键通过</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
-                    <div class="p-5">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <i data-lucide="check-circle" class="h-6 w-6 text-green-400"></i>
-                            </div>
-                            <div class="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">已通过</dt>
-                                    <dd class="text-lg font-medium text-gray-900" id="approvedCharacters">0</dd>
-                                </dl>
+                            <div class="hidden sm:block">
+                                <nav class="flex space-x-8" aria-label="Tabs">
+                                    <button class="import-tab-btn border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="csv">
+                                        CSV格式
+                                    </button>
+                                    <button class="import-tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="feishu">
+                                        飞书格式
+                                    </button>
+                                    <button class="import-tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm" data-tab="json">
+                                        JSON格式
+                                    </button>
+                                </nav>
                             </div>
                         </div>
-                    </div>
-                </div>
 
-                <div class="bg-white overflow-hidden shadow rounded-lg card-hover">
-                    <div class="p-5">
-                        <div class="flex items-center">
-                            <div class="flex-shrink-0">
-                                <i data-lucide="refresh-cw" class="h-6 w-6 text-blue-400"></i>
+                        <!-- 文件上传区域 -->
+                        <div class="mb-6">
+                            <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-gray-400 transition-colors">
+                                <div class="space-y-1 text-center">
+                                    <i data-lucide="upload-cloud" class="mx-auto h-12 w-12 text-gray-400"></i>
+                                    <div class="flex text-sm text-gray-600">
+                                        <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                            <span>上传文件</span>
+                                            <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".csv,.json">
+                                        </label>
+                                        <p class="pl-1">或拖拽文件到这里</p>
+                                    </div>
+                                    <p class="text-xs text-gray-500">支持 CSV, JSON 文件，最大 10MB</p>
+                                </div>
                             </div>
-                            <div class="ml-5 w-0 flex-1">
-                                <dl>
-                                    <dt class="text-sm font-medium text-gray-500 truncate">数据同步</dt>
-                                    <dd class="text-lg font-medium text-gray-900">前端同步</dd>
-                                </dl>
-                                <button onclick="syncToFrontend()" class="mt-2 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600">一键同步到前端</button>
+                        </div>
+
+                        <!-- 数据输入区域 -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                或直接粘贴数据
+                            </label>
+                            <textarea 
+                                id="import-data" 
+                                rows="8" 
+                                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 mt-1 block w-full sm:text-sm border border-gray-300 rounded-md font-mono text-xs"
+                                placeholder="粘贴你的角色数据..."
+                            ></textarea>
+                        </div>
+
+                        <!-- 操作按钮 -->
+                        <div class="flex space-x-3">
+                            <button id="parse-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="search" class="w-4 h-4 mr-2"></i>
+                                解析数据
+                            </button>
+                            <button id="import-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                                开始导入
+                            </button>
+                            <button id="template-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="file-text" class="w-4 h-4 mr-2"></i>
+                                下载模板
+                            </button>
+                        </div>
+
+                        <!-- 进度条 -->
+                        <div id="progress-section" class="mt-6 hidden">
+                            <div class="mb-2">
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-gray-600">导入进度</span>
+                                    <span id="progress-text" class="text-gray-600">0%</span>
+                                </div>
                             </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progress-bar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                            </div>
+                            <div id="current-item" class="mt-2 text-sm text-gray-500"></div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 功能选项卡 -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-                        <button onclick="switchTab('csv')" class="tab-btn border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                            CSV导入
-                        </button>
-                        <button onclick="switchTab('feishu')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                            飞书导入
-                        </button>
-                        <button onclick="switchTab('json')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                            JSON导入
-                        </button>
-                        <button onclick="switchTab('history')" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+            <!-- 侧边栏 -->
+            <div class="space-y-6">
+                <!-- 数据预览 -->
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            <i data-lucide="eye" class="inline-block w-5 h-5 mr-2"></i>
+                            数据预览
+                        </h3>
+                        <div id="preview-content" class="text-sm text-gray-500">
+                            暂无数据预览
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 导入历史 -->
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            <i data-lucide="history" class="inline-block w-5 h-5 mr-2"></i>
                             导入历史
-                        </button>
-                    </nav>
-                </div>
-
-                <div class="p-6">
-                    <!-- CSV导入 -->
-                    <div id="csvTab" class="tab-content">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                选择CSV文件
-                            </label>
-                            <input type="file" id="csvFile" accept=".csv" 
-                                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                        </div>
-                        <button onclick="parseCSV()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                            解析CSV文件
-                        </button>
-                    </div>
-
-                    <!-- 飞书导入 -->
-                    <div id="feishuTab" class="tab-content" style="display: none;">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                飞书文档链接
-                            </label>
-                            <input type="url" id="feishuUrl" placeholder="https://xxx.feishu.cn/wiki/..." 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <button onclick="parseFeishu()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
-                            解析飞书文档
-                        </button>
-                    </div>
-
-                    <!-- JSON导入 -->
-                    <div id="jsonTab" class="tab-content" style="display: none;">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                JSON数据
-                            </label>
-                            <textarea id="jsonData" rows="6" placeholder="粘贴JSON格式的角色数据..." 
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                        </div>
-                        <button onclick="parseJSON()" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">
-                            解析JSON数据
-                        </button>
-                    </div>
-
-                    <!-- 导入历史 -->
-                    <div id="historyTab" class="tab-content" style="display: none;">
-                        <div id="importHistory">
-                            <p class="text-gray-500">暂无导入历史</p>
+                        </h3>
+                        <div id="import-history" class="space-y-3">
+                            <div class="text-sm text-gray-500">暂无导入记录</div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 数据预览 -->
-            <div id="dataPreview" class="mt-8 bg-white shadow rounded-lg" style="display: none;">
-                <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900">数据预览</h3>
-                    <p class="mt-1 max-w-2xl text-sm text-gray-500">预览即将导入的角色数据</p>
-                </div>
-                <div class="px-4 py-5 sm:p-6">
-                    <div id="previewContent"></div>
-                    <div class="mt-6 flex space-x-3">
-                        <button onclick="confirmImport()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
-                            确认导入
-                        </button>
-                        <button onclick="cancelImport()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400">
-                            取消
-                        </button>
+                <!-- 快捷操作 -->
+                <div class="bg-white shadow rounded-lg">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                            <i data-lucide="zap" class="inline-block w-5 h-5 mr-2"></i>
+                            快捷操作
+                        </h3>
+                        <div class="space-y-3">
+                            <button id="view-characters-btn" class="w-full inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="eye" class="w-4 h-4 mr-2"></i>
+                                查看已上传角色
+                            </button>
+                            <button id="sync-btn" class="w-full inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="refresh-cw" class="w-4 h-4 mr-2"></i>
+                                同步到应用
+                            </button>
+                            <button id="backup-btn" class="w-full inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <i data-lucide="database" class="w-4 h-4 mr-2"></i>
+                                备份数据
+                            </button>
+                            <button id="clear-btn" class="w-full inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
+                                清空数据
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 通知系统 -->
-    <div id="notifications" class="fixed top-4 right-4 z-50"></div>
+    <!-- 通知区域 -->
+    <div id="notification" class="fixed top-4 right-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i id="notification-icon" data-lucide="check-circle" class="h-5 w-5 text-green-400"></i>
+                </div>
+                <div class="ml-3 w-0 flex-1">
+                    <p id="notification-title" class="text-sm font-medium text-gray-900">
+                        操作成功
+                    </p>
+                    <p id="notification-message" class="mt-1 text-sm text-gray-500">
+                        操作已完成
+                    </p>
+                </div>
+                <div class="ml-4 flex-shrink-0 flex">
+                    <button id="notification-close" class="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <span class="sr-only">Close</span>
+                        <i data-lucide="x" class="h-5 w-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- 加载脚本 -->
     <script src="admin.js"></script>
-    <script src="auto-sync.js"></script>
-    <script>
-        // 初始化图标
-        lucide.createIcons();
-        
-        // 确保函数在全局作用域
-        window.checkAccess = function() {
-            console.log('🔐 开始验证访问权限...');
-            const password = document.getElementById('accessPassword').value;
-            const messageDiv = document.getElementById('accessMessage');
-            
-            console.log('输入的密码:', password);
-            
-            // 简单的密码验证
-            if (password === 'aiko2024' || password === 'admin123') {
-                console.log('✅ 密码验证成功');
-                localStorage.setItem('admin_access_granted', 'true');
-                showMainContent();
-                messageDiv.innerHTML = '<span class="text-green-600">✅ 访问权限验证成功</span>';
-            } else {
-                console.log('❌ 密码验证失败');
-                messageDiv.innerHTML = '<span class="text-red-600">❌ 密码错误，请重试</span>';
-            }
-        };
-        
-        window.showMainContent = function() {
-            console.log('🎯 显示主要内容...');
-            document.getElementById('accessControl').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-            
-            // 初始化管理系统（安全模式）
-            if (!window.adminSystem) {
-                try {
-                    window.adminSystem = new AdminSystem();
-                    console.log('✅ AdminSystem 初始化成功');
-                } catch (error) {
-                    console.error('❌ AdminSystem 初始化失败:', error);
-                    // 创建一个简化的管理系统对象
-                    window.adminSystem = {
-                        parsedData: [],
-                        handleFileUpload: function(event) {
-                            console.log('📄 处理文件上传...');
-                            const file = event.target.files[0];
-                            if (!file) return;
-                            
-                            const self = this; // 保存this上下文
-                            const reader = new FileReader();
-                            reader.onload = function(e) {
-                                const content = e.target.result;
-                                console.log('📝 文件内容读取完成');
-                                
-                                // 简单的CSV解析
-                                if (file.name.toLowerCase().endsWith('.csv')) {
-                                    try {
-                                        const lines = content.split('\n').filter(line => line.trim());
-                                        const headers = lines[0].split(',');
-                                        const data = [];
-                                        
-                                        for (let i = 1; i < lines.length; i++) {
-                                            const values = lines[i].split(',');
-                                            if (values.length >= headers.length) {
-                                                const character = {
-                                                    id: 'imported_' + Date.now() + '_' + i,
-                                                    name: values[0] || '未知角色',
-                                                    description: values[1] || '暂无描述',
-                                                    personality: values[2] || '',
-                                                    prompt: values[3] || '',
-                                                    tags: values[4] ? values[4].split(';') : [],
-                                                    type: values[5] || '其他',
-                                                    source: values[6] || '导入',
-                                                    creator: values[7] || '未知',
-                                                    imageUrl: values[8] || '',
-                                                    isOfficial: values[9] === '是' || values[9] === 'true',
-                                                    isFavorited: values[10] === '是' || values[10] === 'true',
-                                                    reviewStatus: 'pending',
-                                                    category: 'community'
-                                                };
-                                                data.push(character);
-                                            }
-                                        }
-                                        
-                                        self.parsedData = data; // 使用self
-                                        console.log('✅ CSV解析成功，角色数量:', data.length);
-                                        self.renderPreview(); // 使用self
-                                        
-                                    } catch (error) {
-                                        console.error('❌ CSV解析失败:', error);
-                                        alert('CSV解析失败: ' + error.message);
-                                    }
-                                }
-                            };
-                            reader.readAsText(file);
-                        },
-                        renderPreview: function() {
-                            console.log('🖼️ 渲染数据预览...');
-                            const previewDiv = document.getElementById('dataPreview');
-                            const contentDiv = document.getElementById('previewContent');
-                            
-                            if (this.parsedData && this.parsedData.length > 0) {
-                                let html = `<div class="mb-4"><h4 class="font-semibold">预览数据 (${this.parsedData.length} 个角色)</h4></div>`;
-                                html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
-                                
-                                this.parsedData.slice(0, 6).forEach(char => {
-                                    html += `
-                                        <div class="border rounded p-3">
-                                            <h5 class="font-medium">${char.name}</h5>
-                                            <p class="text-sm text-gray-600 truncate">${char.description}</p>
-                                            <div class="text-xs text-gray-500 mt-1">
-                                                类型: ${char.type} | 来源: ${char.source}
-                                            </div>
-                                        </div>
-                                    `;
-                                });
-                                
-                                if (this.parsedData.length > 6) {
-                                    html += `<div class="border rounded p-3 flex items-center justify-center text-gray-500">还有 ${this.parsedData.length - 6} 个角色...</div>`;
-                                }
-                                html += '</div>';
-                                
-                                contentDiv.innerHTML = html;
-                                previewDiv.style.display = 'block';
-                            }
-                        },
-                        importCharacters: function() {
-                            console.log('💾 开始导入角色...');
-                            if (this.parsedData && this.parsedData.length > 0) {
-                                try {
-                                    // 获取现有数据
-                                    const existingData = localStorage.getItem('cached_characters');
-                                    let characters = existingData ? JSON.parse(existingData) : [];
-                                    
-                                    // 添加新角色
-                                    characters = characters.concat(this.parsedData);
-                                    
-                                    // 保存到localStorage
-                                    localStorage.setItem('cached_characters', JSON.stringify(characters));
-                                    localStorage.setItem('characters_cache_time', Date.now().toString());
-                                    
-                                    // 触发同步
-                                    localStorage.setItem('data_sync_timestamp', Date.now().toString());
-                                    
-                                    console.log('✅ 角色导入成功，总数:', characters.length);
-                                    alert(`成功导入 ${this.parsedData.length} 个角色！`);
-                                    
-                                    // 清理预览
-                                    this.parsedData = [];
-                                    document.getElementById('dataPreview').style.display = 'none';
-                                    
-                                    // 更新统计
-                                    setTimeout(updateStats, 500);
-                                    
-                                } catch (error) {
-                                    console.error('❌ 导入失败:', error);
-                                    alert('导入失败: ' + error.message);
-                                }
-                            }
-                        },
-                        approveAllPending: function() {
-                            console.log('🔍 批量审核通过...');
-                            try {
-                                const data = localStorage.getItem('cached_characters');
-                                if (data) {
-                                    const characters = JSON.parse(data);
-                                    let approvedCount = 0;
-                                    
-                                    characters.forEach(char => {
-                                        if (char.reviewStatus === 'pending') {
-                                            char.reviewStatus = 'approved';
-                                            approvedCount++;
-                                        }
-                                    });
-                                    
-                                    localStorage.setItem('cached_characters', JSON.stringify(characters));
-                                    localStorage.setItem('data_sync_timestamp', Date.now().toString());
-                                    
-                                    console.log(`✅ 批量审核完成，通过 ${approvedCount} 个角色`);
-                                    alert(`成功审核通过 ${approvedCount} 个角色！`);
-                                    
-                                    setTimeout(updateStats, 500);
-                                }
-                            } catch (error) {
-                                console.error('❌ 批量审核失败:', error);
-                                alert('批量审核失败: ' + error.message);
-                            }
-                        }
-                    };
-                    console.log('✅ 备用管理系统创建成功');
-                }
-            }
-            
-            // 更新统计数据
-            updateStats();
-        };
-
-        // 统计更新函数
-        window.updateStats = function() {
-            try {
-                const data = localStorage.getItem('cached_characters');
-                if (data) {
-                    const characters = JSON.parse(data);
-                    const pending = characters.filter(c => c.reviewStatus === 'pending').length;
-                    const approved = characters.filter(c => c.reviewStatus === 'approved' || c.isOfficial).length;
-                    
-                    document.getElementById('totalCharacters').textContent = characters.length;
-                    document.getElementById('pendingCharacters').textContent = pending;
-                    document.getElementById('approvedCharacters').textContent = approved;
-                }
-            } catch (error) {
-                console.error('统计更新失败:', error);
-            }
-        };
-
-        // 一键审核通过函数
-        window.approveAllPending = function() {
-            console.log('🔍 执行批量审核...');
-            if (window.adminSystem && window.adminSystem.approveAllPending) {
-                window.adminSystem.approveAllPending();
-                setTimeout(updateStats, 1000);
-            } else {
-                console.error('审核函数未找到');
-            }
-        };
-
-        // 选项卡切换
-        window.switchTab = function(tabName) {
-            console.log('🔄 切换选项卡:', tabName);
-            // 隐藏所有选项卡内容
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.style.display = 'none';
-            });
-            
-            // 移除所有按钮的活动状态
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.className = btn.className.replace('border-blue-500 text-blue-600', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300');
-            });
-            
-            // 显示选中的选项卡
-            document.getElementById(tabName + 'Tab').style.display = 'block';
-            
-            // 激活选中的按钮
-            event.target.className = event.target.className.replace('border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300', 'border-blue-500 text-blue-600');
-        };
-
-        // CSV解析函数
-        window.parseCSV = function() {
-            console.log('📄 开始CSV解析...');
-            if (window.adminSystem && window.adminSystem.handleFileUpload) {
-                const fileInput = document.getElementById('csvFile');
-                if (fileInput.files.length > 0) {
-                    console.log('📁 文件已选择:', fileInput.files[0].name);
-                    window.adminSystem.handleFileUpload({ target: fileInput });
-                } else {
-                    alert('请先选择CSV文件');
-                    console.warn('⚠️ 没有选择文件');
-                }
-            } else {
-                console.error('❌ AdminSystem未初始化或handleFileUpload函数不存在');
-                alert('系统未正确初始化，请刷新页面重试');
-            }
-        };
-
-        // 飞书解析函数
-        window.parseFeishu = function() {
-            const url = document.getElementById('feishuUrl').value;
-            if (url) {
-                alert('飞书文档解析功能开发中，请使用CSV导入');
-            } else {
-                alert('请输入飞书文档链接');
-            }
-        };
-
-        // JSON解析函数
-        window.parseJSON = function() {
-            console.log('📝 开始JSON解析...');
-            const jsonData = document.getElementById('jsonData').value;
-            if (jsonData) {
-                try {
-                    const data = JSON.parse(jsonData);
-                    if (window.adminSystem) {
-                        window.adminSystem.parsedData = Array.isArray(data) ? data : [data];
-                        window.adminSystem.renderPreview();
-                        console.log('✅ JSON解析成功，数据条数:', window.adminSystem.parsedData.length);
-                    } else {
-                        console.error('❌ AdminSystem未初始化');
-                        alert('系统未正确初始化，请刷新页面重试');
-                    }
-                } catch (error) {
-                    console.error('❌ JSON解析错误:', error);
-                    alert('JSON格式错误: ' + error.message);
-                }
-            } else {
-                alert('请输入JSON数据');
-            }
-        };
-
-        // 确认导入
-        window.confirmImport = function() {
-            console.log('✅ 确认导入角色数据...');
-            if (window.adminSystem && window.adminSystem.importCharacters) {
-                window.adminSystem.importCharacters();
-                setTimeout(updateStats, 1000);
-            } else {
-                console.error('❌ 导入函数不存在');
-                alert('系统未正确初始化，请刷新页面重试');
-            }
-        };
-
-        // 取消导入
-        window.cancelImport = function() {
-            console.log('❌ 取消导入');
-            document.getElementById('dataPreview').style.display = 'none';
-            if (window.adminSystem) {
-                window.adminSystem.parsedData = [];
-            }
-        };
-
-        // 真正的自动同步函数已在auto-sync.js中定义
-        
-        // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🚀 AIko Spark 后台管理系统启动（在线版本）');
-            // 检查是否已经验证过访问权限
-            if (localStorage.getItem('admin_access_granted') === 'true') {
-                showMainContent();
-            }
-        });
-    </script>
 </body>
 </html>
