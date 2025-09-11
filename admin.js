@@ -1231,51 +1231,82 @@ class AdminSystem {
                 return;
             }
             
-            // 创建GitHub Gist来存储数据（免费且可靠）
-            const syncData = {
-                timestamp: Date.now(),
-                characters: characters,
-                version: '1.0',
-                source: 'aiko-spark-admin'
-            };
-            
-            // 创建Gist
-            const gistResponse = await fetch('https://api.github.com/gists', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'AIko-Spark-Sync'
-                },
-                body: JSON.stringify({
-                    description: 'AIko Spark角色数据同步 - ' + new Date().toISOString(),
-                    public: false,
-                    files: {
-                        'characters.json': {
-                            content: JSON.stringify(syncData, null, 2)
-                        }
+            // 同步数据到Vercel KV数据库（推荐方案）
+            try {
+                console.log('🔄 开始同步数据到Vercel KV...');
+                
+                const syncResponse = await fetch('https://aiko-spark-sync.vercel.app/api/characters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        characters: characters,
+                        source: 'aiko-spark-admin',
+                        timestamp: Date.now()
+                    })
+                });
+                
+                if (syncResponse.ok) {
+                    const result = await syncResponse.json();
+                    console.log('✅ Vercel KV同步成功:', result);
+                    
+                    // 构建前端应用URL
+                    const frontendUrl = `https://aiko-spark-sync.vercel.app/`;
+                    
+                    // 显示同步成功提示
+                    this.showSyncSuccessModal(frontendUrl, characters.length);
+                    
+                } else {
+                    throw new Error(`同步失败: HTTP ${syncResponse.status}`);
+                }
+                
+            } catch (kvError) {
+                console.warn('Vercel KV同步失败，尝试GitHub Gist方案:', kvError);
+                
+                // 回退到GitHub Gist方案
+                const syncData = {
+                    timestamp: Date.now(),
+                    characters: characters,
+                    version: '1.0',
+                    source: 'aiko-spark-admin'
+                };
+                
+                try {
+                    const gistResponse = await fetch('https://api.github.com/gists', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'User-Agent': 'AIko-Spark-Sync'
+                        },
+                        body: JSON.stringify({
+                            description: 'AIko Spark角色数据同步 - ' + new Date().toISOString(),
+                            public: false,
+                            files: {
+                                'characters.json': {
+                                    content: JSON.stringify(syncData, null, 2)
+                                }
+                            }
+                        })
+                    });
+                    
+                    if (gistResponse.ok) {
+                        const gistData = await gistResponse.json();
+                        const gistId = gistData.id;
+                        const frontendUrl = `https://aiko-spark-sync.vercel.app/?gist=${gistId}`;
+                        
+                        console.log('✅ GitHub Gist备用方案成功:', gistId);
+                        this.showSyncSuccessModal(frontendUrl, characters.length);
+                        
+                    } else {
+                        throw new Error('GitHub Gist创建也失败了');
                     }
-                })
-            });
-            
-            let frontendUrl;
-            
-            if (gistResponse.ok) {
-                const gistData = await gistResponse.json();
-                const gistId = gistData.id;
-                
-                // 构建前端应用URL，使用gist ID
-                frontendUrl = `https://aiko-spark-sync.vercel.app/?gist=${gistId}`;
-                
-                console.log('✅ Gist创建成功:', gistId);
-                
-            } else {
-                // 如果Gist创建失败，回退到直接传输小数据集
-                console.warn('Gist创建失败，使用回退方案');
-                
-                // 只传输前10个角色作为示例
-                const sampleCharacters = characters.slice(0, 10);
-                const encodedData = encodeURIComponent(JSON.stringify(sampleCharacters));
-                frontendUrl = `https://aiko-spark-sync.vercel.app/sync-bridge.html?data=${encodedData}&total=${characters.length}`;
+                    
+                } catch (gistError) {
+                    console.error('所有同步方案都失败了:', gistError);
+                    this.showNotification('error', '同步失败', '无法同步数据到前端，请检查网络连接');
+                    return;
+                }
             }
             
             // 模拟同步过程
