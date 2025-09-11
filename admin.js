@@ -1281,7 +1281,7 @@ class AdminSystem {
                         },
                         body: JSON.stringify({
                             description: 'AIko Spark角色数据同步 - ' + new Date().toISOString(),
-                            public: false,
+                            public: true,
                             files: {
                                 'characters.json': {
                                     content: JSON.stringify(syncData, null, 2)
