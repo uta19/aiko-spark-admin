@@ -1231,10 +1231,9 @@ class AdminSystem {
                 return;
             }
             
-            // 使用localStorage + postMessage同步方案（主要方案）
-            console.log('🔄 使用localStorage + postMessage同步方案...');
+            // 方案1：直接调用前端API同步数据（推荐）
+            console.log('🔄 调用前端API同步数据...');
             
-            const syncKey = 'aiko_sync_' + Date.now();
             const syncData = {
                 characters: characters,
                 timestamp: Date.now(),
@@ -1242,18 +1241,40 @@ class AdminSystem {
                 count: characters.length
             };
             
-            // 保存到localStorage
+            try {
+                // 调用前端API保存数据
+                const apiResponse = await fetch('https://aiko-spark-sync.vercel.app/api/characters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(syncData)
+                });
+                
+                if (apiResponse.ok) {
+                    const result = await apiResponse.json();
+                    console.log('✅ API同步成功:', result);
+                } else {
+                    throw new Error(`API调用失败: ${apiResponse.status}`);
+                }
+            } catch (error) {
+                console.error('❌ API同步失败:', error);
+                // 降级到localStorage方案
+                console.log('🔄 降级到localStorage + postMessage方案...');
+            }
+            
+            // 备用方案：localStorage + postMessage
+            const syncKey = 'aiko_sync_' + Date.now();
             localStorage.setItem(syncKey, JSON.stringify(syncData));
             localStorage.setItem('aiko_latest_sync', syncKey);
             
-            // 触发存储事件通知其他标签页
             window.dispatchEvent(new StorageEvent('storage', {
                 key: 'aiko_latest_sync',
                 newValue: syncKey,
                 oldValue: null
             }));
             
-            console.log('✅ localStorage同步完成，数据已保存');
+            console.log('✅ localStorage备用同步完成');
             
             // 打开前端应用
             const frontendUrl = `https://aiko-spark-sync.vercel.app/`;
