@@ -106,10 +106,12 @@ class AdminSystem {
         }
     }
 
-    init() {
+    async init() {
         this.initLucideIcons();
         this.bindEvents();
-        this.updateStats();
+        
+        // 异步加载数据和更新统计
+        await this.updateStats();
         this.renderImportHistory();
         this.loadPlaceholder();
     }
@@ -1033,11 +1035,29 @@ class AdminSystem {
             `成功导入 ${success} 个角色${failed > 0 ? `，失败 ${failed} 个` : ''}`);
     }
 
-    // 保存角色到localStorage
-    saveCharacterToStorage(character) {
-        const existingCharacters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
-        existingCharacters.push(character);
-        localStorage.setItem('cached_characters', JSON.stringify(existingCharacters));
+    // 保存角色到存储（API + localStorage）
+    async saveCharacterToStorage(character) {
+        try {
+            // 获取现有角色
+            const existingCharacters = await this.loadCharactersFromAPI();
+            existingCharacters.push(character);
+            
+            // 保存到API
+            const success = await this.saveCharactersToAPI(existingCharacters);
+            
+            if (success) {
+                console.log('✅ 角色已保存到API和本地存储');
+            } else {
+                console.warn('⚠️ API保存失败，仅保存到本地存储');
+            }
+        } catch (error) {
+            console.error('❌ 保存角色失败:', error);
+            
+            // 降级到localStorage
+            const existingCharacters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+            existingCharacters.push(character);
+            localStorage.setItem('cached_characters', JSON.stringify(existingCharacters));
+        }
     }
 
     // 渲染导入历史
@@ -1062,9 +1082,105 @@ class AdminSystem {
         historyDiv.innerHTML = historyHtml;
     }
 
+    // 从前端API获取角色数据
+    async loadCharactersFromAPI() {
+        try {
+            console.log('🔄 从前端API获取角色数据...');
+            
+            const response = await fetch('https://aiko-spark-sync.vercel.app/api/characters');
+            
+            if (response.ok) {
+                const result = await response.json();
+                
+                if (result.success && result.data && result.data.characters) {
+                    const characters = result.data.characters;
+                    console.log('✅ 从API获取到角色数据:', characters.length, '个');
+                    
+                    // 保存到localStorage（保持兼容性）
+                    localStorage.setItem('cached_characters', JSON.stringify(characters));
+                    localStorage.setItem('characters_cache_time', Date.now().toString());
+                    localStorage.setItem('data_source', 'api');
+                    
+                    return characters;
+                } else {
+                    console.warn('⚠️ API返回格式异常:', result);
+                }
+            } else {
+                console.warn('⚠️ API请求失败:', response.status, response.statusText);
+            }
+        } catch (error) {
+            console.error('❌ API获取失败:', error);
+        }
+        
+        // 降级到localStorage
+        const localData = localStorage.getItem('cached_characters');
+        if (localData) {
+            try {
+                const characters = JSON.parse(localData);
+                console.log('📦 使用本地缓存数据:', characters.length, '个角色');
+                return characters;
+            } catch (parseError) {
+                console.error('❌ 本地数据解析失败:', parseError);
+            }
+        }
+        
+        console.log('⚠️ 没有可用的角色数据');
+        return [];
+    }
+
+    // 保存角色数据到前端API
+    async saveCharactersToAPI(characters) {
+        try {
+            console.log('🔄 保存角色数据到前端API...');
+            
+            const response = await fetch('https://aiko-spark-sync.vercel.app/api/characters', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    characters: characters,
+                    source: 'aiko-spark-admin'
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ 保存成功:', result.message);
+                    
+                    // 同时保存到localStorage（保持兼容性）
+                    localStorage.setItem('cached_characters', JSON.stringify(characters));
+                    localStorage.setItem('characters_cache_time', Date.now().toString());
+                    
+                    return true;
+                } else {
+                    console.error('❌ API保存失败:', result.error);
+                }
+            } else {
+                console.error('❌ API请求失败:', response.status, response.statusText);
+            }
+        } catch (error) {
+            console.error('❌ API保存异常:', error);
+        }
+        
+        // 降级到localStorage
+        try {
+            localStorage.setItem('cached_characters', JSON.stringify(characters));
+            localStorage.setItem('characters_cache_time', Date.now().toString());
+            console.log('📦 已保存到本地缓存');
+            return true;
+        } catch (storageError) {
+            console.error('❌ 本地保存失败:', storageError);
+            return false;
+        }
+    }
+
     // 更新统计数据
-    updateStats() {
-        const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+    async updateStats() {
+        // 优先从API获取最新数据
+        const characters = await this.loadCharactersFromAPI();
         
         document.getElementById('totalCharacters').textContent = characters.length;
         document.getElementById('approvedCharacters').textContent = 
@@ -1077,8 +1193,8 @@ class AdminSystem {
     }
 
     // 查看已上传的角色
-    viewUploadedCharacters() {
-        const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+    async viewUploadedCharacters() {
+        const characters = await this.loadCharactersFromAPI();
         
         if (characters.length === 0) {
             this.showNotification('warning', '没有数据', '当前没有已上传的角色数据');
@@ -1204,8 +1320,8 @@ class AdminSystem {
     }
     
     // 导出角色数据
-    exportCharacters() {
-        const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+    async exportCharacters() {
+        const characters = await this.loadCharactersFromAPI();
         const dataStr = JSON.stringify(characters, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1224,7 +1340,7 @@ class AdminSystem {
         this.showNotification('info', '同步中', '正在同步数据到前端应用...');
         
         try {
-            const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+            const characters = await this.loadCharactersFromAPI();
             
             if (characters.length === 0) {
                 this.showNotification('warning', '同步失败', '没有可同步的角色数据');
