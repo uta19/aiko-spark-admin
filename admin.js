@@ -1188,8 +1188,47 @@ class AdminSystem {
         document.getElementById('pendingCharacters').textContent = 
             characters.filter(c => c.reviewStatus === 'pending').length;
         
-        // 模拟对话次数
-        document.getElementById('totalChats').textContent = Math.floor(characters.length * 1.5);
+        // 计算真实对话次数
+        const totalChats = this.calculateRealChatCount();
+        document.getElementById('totalChats').textContent = totalChats;
+    }
+
+    // 计算真实对话次数
+    calculateRealChatCount() {
+        try {
+            let totalCount = 0;
+            
+            // 遍历localStorage中所有以chat_history_开头的键
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                
+                if (key && key.startsWith('chat_history_')) {
+                    try {
+                        const chatHistory = JSON.parse(localStorage.getItem(key) || '[]');
+                        
+                        if (Array.isArray(chatHistory)) {
+                            // 计算用户消息数量（不包括AI回复）
+                            const userMessages = chatHistory.filter(msg => msg.role === 'user');
+                            totalCount += userMessages.length;
+                        }
+                    } catch (parseError) {
+                        console.warn('解析聊天历史失败:', key, parseError);
+                    }
+                }
+            }
+            
+            console.log('📊 计算得到的真实对话次数:', totalCount);
+            return totalCount;
+            
+        } catch (error) {
+            console.error('❌ 计算对话次数失败:', error);
+            
+            // 降级到估算值
+            const characters = JSON.parse(localStorage.getItem('cached_characters') || '[]');
+            const estimatedCount = Math.floor(characters.length * 0.8); // 更保守的估算
+            console.log('📊 使用估算对话次数:', estimatedCount);
+            return estimatedCount;
+        }
     }
 
     // 查看已上传的角色
@@ -1280,11 +1319,234 @@ class AdminSystem {
                             </div>
                         ` : ''}
                     </div>
+                    <div class="flex flex-col gap-2 ml-2">
+                        <button onclick="adminSystem.editCharacter('${char.id}')" class="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors" title="编辑角色">
+                            <i data-lucide="edit" class="w-3 h-3"></i>
+                        </button>
+                        <button onclick="adminSystem.deleteCharacter('${char.id}')" class="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors" title="删除角色">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `).join('');
     }
     
+    // 编辑角色
+    async editCharacter(characterId) {
+        try {
+            const characters = await this.loadCharactersFromAPI();
+            const character = characters.find(c => c.id === characterId);
+            
+            if (!character) {
+                this.showNotification('error', '错误', '找不到指定的角色');
+                return;
+            }
+            
+            // 创建编辑模态框
+            const editModalHtml = `
+                <div id="edit-character-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" style="z-index: 20000;">
+                    <div class="relative top-10 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-900">编辑角色: ${character.name}</h3>
+                            <button onclick="document.getElementById('edit-character-modal').remove()" class="text-gray-400 hover:text-gray-600">
+                                <i data-lucide="x" class="w-6 h-6"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="edit-character-form" class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">角色名称</label>
+                                    <input type="text" id="edit-name" value="${character.name || ''}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">角色类型</label>
+                                    <select id="edit-type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="游戏" ${character.type === '游戏' ? 'selected' : ''}>游戏</option>
+                                        <option value="动漫" ${character.type === '动漫' ? 'selected' : ''}>动漫</option>
+                                        <option value="其他" ${character.type === '其他' ? 'selected' : ''}>其他</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">来源</label>
+                                    <input type="text" id="edit-source" value="${character.source || ''}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">创建者</label>
+                                    <input type="text" id="edit-creator" value="${character.creator || ''}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">审核状态</label>
+                                    <select id="edit-reviewStatus" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="pending" ${character.reviewStatus === 'pending' ? 'selected' : ''}>待审核</option>
+                                        <option value="approved" ${character.reviewStatus === 'approved' ? 'selected' : ''}>已审核</option>
+                                        <option value="rejected" ${character.reviewStatus === 'rejected' ? 'selected' : ''}>已拒绝</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">头像URL</label>
+                                    <input type="url" id="edit-imageUrl" value="${character.imageUrl || ''}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">角色描述</label>
+                                <textarea id="edit-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>${character.description || ''}</textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">性格特点</label>
+                                <textarea id="edit-personality" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">${character.personality || ''}</textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">AI对话提示词</label>
+                                <textarea id="edit-prompt" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">${character.prompt || ''}</textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">标签 (用逗号分隔)</label>
+                                <input type="text" id="edit-tags" value="${(character.tags || []).join(', ')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="例如: 可爱, 活泼, 学生">
+                            </div>
+                            
+                            <div class="flex justify-end gap-3 pt-4">
+                                <button type="button" onclick="document.getElementById('edit-character-modal').remove()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">
+                                    取消
+                                </button>
+                                <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                    保存修改
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', editModalHtml);
+            
+            // 重新初始化图标
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            
+            // 绑定表单提交事件
+            document.getElementById('edit-character-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await this.saveCharacterEdit(characterId);
+            });
+            
+        } catch (error) {
+            console.error('❌ 编辑角色失败:', error);
+            this.showNotification('error', '错误', '编辑角色时发生错误');
+        }
+    }
+    
+    // 保存角色编辑
+    async saveCharacterEdit(characterId) {
+        try {
+            const characters = await this.loadCharactersFromAPI();
+            const characterIndex = characters.findIndex(c => c.id === characterId);
+            
+            if (characterIndex === -1) {
+                this.showNotification('error', '错误', '找不到指定的角色');
+                return;
+            }
+            
+            // 获取表单数据
+            const updatedCharacter = {
+                ...characters[characterIndex],
+                name: document.getElementById('edit-name').value.trim(),
+                type: document.getElementById('edit-type').value,
+                source: document.getElementById('edit-source').value.trim(),
+                creator: document.getElementById('edit-creator').value.trim(),
+                reviewStatus: document.getElementById('edit-reviewStatus').value,
+                imageUrl: document.getElementById('edit-imageUrl').value.trim(),
+                description: document.getElementById('edit-description').value.trim(),
+                personality: document.getElementById('edit-personality').value.trim(),
+                prompt: document.getElementById('edit-prompt').value.trim(),
+                tags: document.getElementById('edit-tags').value.split(',').map(tag => tag.trim()).filter(tag => tag)
+            };
+            
+            // 验证必填字段
+            if (!updatedCharacter.name || !updatedCharacter.description) {
+                this.showNotification('error', '验证失败', '角色名称和描述不能为空');
+                return;
+            }
+            
+            // 更新角色数组
+            characters[characterIndex] = updatedCharacter;
+            
+            // 保存到API
+            const success = await this.saveCharactersToAPI(characters);
+            
+            if (success) {
+                this.showNotification('success', '保存成功', `角色 "${updatedCharacter.name}" 已更新`);
+                
+                // 关闭编辑模态框
+                document.getElementById('edit-character-modal').remove();
+                
+                // 刷新角色列表
+                document.getElementById('characters-modal').remove();
+                await this.viewUploadedCharacters();
+                
+                // 更新统计数据
+                await this.updateStats();
+            } else {
+                this.showNotification('error', '保存失败', '无法保存角色修改');
+            }
+            
+        } catch (error) {
+            console.error('❌ 保存角色编辑失败:', error);
+            this.showNotification('error', '错误', '保存时发生错误');
+        }
+    }
+    
+    // 删除角色
+    async deleteCharacter(characterId) {
+        try {
+            const characters = await this.loadCharactersFromAPI();
+            const character = characters.find(c => c.id === characterId);
+            
+            if (!character) {
+                this.showNotification('error', '错误', '找不到指定的角色');
+                return;
+            }
+            
+            if (!confirm(`确定要删除角色 "${character.name}" 吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            // 从数组中移除角色
+            const updatedCharacters = characters.filter(c => c.id !== characterId);
+            
+            // 保存到API
+            const success = await this.saveCharactersToAPI(updatedCharacters);
+            
+            if (success) {
+                this.showNotification('success', '删除成功', `角色 "${character.name}" 已删除`);
+                
+                // 刷新角色列表
+                document.getElementById('characters-modal').remove();
+                await this.viewUploadedCharacters();
+                
+                // 更新统计数据
+                await this.updateStats();
+            } else {
+                this.showNotification('error', '删除失败', '无法删除角色');
+            }
+            
+        } catch (error) {
+            console.error('❌ 删除角色失败:', error);
+            this.showNotification('error', '错误', '删除时发生错误');
+        }
+    }
+
     // 设置角色搜索和过滤
     setupCharacterSearch(characters) {
         const searchInput = document.getElementById('character-search');
